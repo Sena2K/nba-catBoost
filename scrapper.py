@@ -1,204 +1,231 @@
-import re
-import time
 import requests
 import pandas as pd
-from bs4 import BeautifulSoup
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta
+import time
+import json
 
-BASE_URL = "https://www.espn.com"
-API_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={gid}"
-
-# TEAMS = [
-#     "ATL","BOS","NJN","CHA","CHI","CLE","DAL","DEN","DET","GSW","HOU","IND","LAC","LAL","MEM",
-#     "MIA","MIL","MIN","NOH","NYK","OKC","ORL","PHI","PHO","POR","SAC","SAS","UTA","WAS"
-# ]
-
-TEAMS = [
-    "ATL"
-]
-
-HEADERS_HTML = {"User-Agent": "Mozilla/5.0"}
-HEADERS_API = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "application/json, text/plain, */*",
-    "Referer": "https://www.espn.com/"
+# Configuração da API
+headers = {
+    'x-rapidapi-host': 'api-nba-v1.p.rapidapi.com',
+    'x-rapidapi-key': '27244be62dmshb2410b2c636a6a7p18e011jsn345988bae2b4'
 }
 
-def extract_game_id(href: str) -> Optional[str]:
-    m = re.search(r"/gameId/(\d+)", href)
-    return m.group(1) if m else None
+# Times que queremos buscar
+teams_of_interest = [
+    'Oklahoma City Thunder',
+    'Minnesota Timberwolves',
+    'Indiana Pacers',
+    'New York Knicks',
+    'Toronto Raptors'
+]
 
-def get_team_year_game_ids(team: str, year: int) -> List[str]:
-    url = f"{BASE_URL}/nba/team/schedule/_/name/{team}/season/{year}/seasontype/2"
-    r = requests.get(url, headers=HEADERS_HTML, timeout=30)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "lxml")
-    links = [
-        a["href"] for a in soup.find_all("a", class_="AnchorLink", href=True)
-        if "/nba/game/_/gameId/" in a["href"]
-    ]
-    gids = []
-    for lk in links:
-        gid = extract_game_id(lk)
-        if gid:
-            gids.append(gid)
-    return gids
+# Função para buscar jogos por data com retry
+def get_games_by_date(date, max_retries=3):
+    url = f"https://api-nba-v1.p.rapidapi.com/games?date={date}"
 
-def to_float(x: Any) -> Optional[float]:
-    if x is None:
-        return None
-    if isinstance(x, (int, float)):
-        return float(x)
-    s = str(x).strip()
-    if s == "" or s == "—":
-        return None
-    if s.endswith("%"):
+    for attempt in range(max_retries):
         try:
-            return float(s[:-1].replace(",", ".")) / 100.0
-        except:
-            return None
-    m = re.match(r"^\s*(\d+)\s*-\s*(\d+)\s*$", s)
-    if m:
-        a = float(m.group(1))
-        b = float(m.group(2))
-        return a / b if b else None
-    s = s.replace(",", "")
-    try:
-        return float(s)
-    except:
-        return None
+            response = requests.get(url, headers=headers)
 
-def snake(s: str) -> str:
-    s = s.lower()
-    s = re.sub(r"[^a-z0-9]+", "_", s)
-    return re.sub(r"_+", "_", s).strip("_")
+            if response.status_code != 200:
+                print(f"  ⚠️  Erro na API: Status {response.status_code}")
+                if response.status_code == 429:
+                    print("  ⚠️  Too Many Requests! Aguardando 60 segundos...")
+                    time.sleep(60)
+                    continue
 
-def get_summary(gid: str) -> Dict[str, Any]:
-    url = API_SUMMARY.format(gid=gid)
-    r = requests.get(url, headers=HEADERS_API, timeout=30)
-    r.raise_for_status()
-    return r.json()
+            data = response.json()
 
-def pick_home_away(js: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    teams = js.get("boxscore", {}).get("teams", [])
-    out = {}
-    for t in teams:
-        side = t.get("homeAway")
-        if side in ("home", "away"):
-            out[side] = t
-    if not out:
-        comp = js.get("competitions", [{}])[0]
-        for c in comp.get("competitors", []):
-            key = c.get("homeAway")
-            if key in ("home", "away"):
-                out[key] = {"team": c.get("team", {}), "score": c.get("score")}
-    return out
+            if 'errors' in data and data['errors']:
+                print(f"  ⚠️  Erro na resposta: {data['errors']}")
 
-def flatten_stat_list(stats_list: List[Dict[str, Any]]) -> Dict[str, Optional[float]]:
-    out: Dict[str, Optional[float]] = {}
-    for st in stats_list or []:
-        name = st.get("name") or st.get("abbreviation") or st.get("displayName")
-        if not name:
-            continue
-        key = snake(name)
-        val = st.get("value")
-        disp = st.get("displayValue")
-        num = to_float(val if val not in (None, "", "0-0") else disp)
-        out[key] = num
-    return out
+            return data
 
-def flatten_team(team_obj: Dict[str, Any], prefix: str) -> Dict[str, Any]:
-    out: Dict[str, Any] = {}
-    info = team_obj.get("team", {})
-    out[f"{prefix}_team_id"] = info.get("id")
-    out[f"{prefix}_team_abbr"] = info.get("abbreviation")
-    out[f"{prefix}_team_name"] = info.get("displayName")
-    out[f"{prefix}_score"] = to_float(team_obj.get("score"))
-
-    stats1 = flatten_stat_list(team_obj.get("statistics", []))
-    for k, v in stats1.items():
-        out[f"{prefix}_{k}"] = v
-
-    for grp in team_obj.get("groups", []) or []:
-        gname = snake(grp.get("name") or grp.get("displayName") or "")
-        gstats = flatten_stat_list(grp.get("statistics", []))
-        for k, v in gstats.items():
-            key = f"{prefix}_{gname}_{k}" if gname else f"{prefix}_{k}"
-            if key not in out:
-                out[key] = v
-
-    totals = team_obj.get("totals", {})
-    for k, v in totals.items():
-        key = f"{prefix}_{snake(k)}"
-        if key not in out:
-            out[key] = to_float(v)
-
-    return out
-
-def build_row(gid: str) -> Dict[str, Any]:
-    js = get_summary(gid)
-    comp = js.get("competitions", [{}])[0]
-    date = comp.get("date")
-    status = comp.get("status", {}).get("type", {}).get("name")
-
-    sides = pick_home_away(js)
-    if "home" not in sides or "away" not in sides:
-        raise ValueError(f"jogo {gid} sem blocos home e away")
-
-    home = flatten_team(sides["home"], "home")
-    away = flatten_team(sides["away"], "away")
-
-    row: Dict[str, Any] = {"game_id": gid, "date": date, "status": status}
-    row.update(home)
-    row.update(away)
-
-    hs = row.get("home_score")
-    as_ = row.get("away_score")
-    if hs is not None and as_ is not None:
-        row["home_win"] = 1 if float(hs) > float(as_) else 0
-        row["point_diff"] = float(hs) - float(as_)
-    else:
-        row["home_win"] = None
-        row["point_diff"] = None
-    return row
-
-def main():
-    years = list(range(2015, 2025))
-    all_gids: List[str] = []
-    seen = set()
-
-    for team in TEAMS:
-        for year in years:
-            try:
-                gids = get_team_year_game_ids(team, year)
-                for gid in gids:
-                    if gid not in seen:
-                        seen.add(gid)
-                        all_gids.append(gid)
-                print(f"time {team} ano {year} ids coletados {len(gids)} total acumulado {len(all_gids)}")
-                time.sleep(0.4)
-            except Exception as e:
-                print(f"falha schedule {team} {year} {e}")
-
-    rows: List[Dict[str, Any]] = []
-    for i, gid in enumerate(all_gids, 1):
-        try:
-            rows.append(build_row(gid))
         except Exception as e:
-            print(f"falha resumo {gid} {e}")
-        if i % 20 == 0:
-            time.sleep(0.6)
+            print(f"  ⚠️  Erro na requisição: {e}")
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 5
+                print(f"  Tentando novamente em {wait_time} segundos...")
+                time.sleep(wait_time)
 
-    df = pd.DataFrame(rows)
-    meta = ["game_id", "date", "status"]
-    homes = sorted([c for c in df.columns if c.startswith("home_") and c not in ("home_win",)])
-    aways = sorted([c for c in df.columns if c.startswith("away_")])
-    tail = [c for c in ["point_diff", "home_win"] if c in df.columns]
-    cols = [c for c in meta if c in df.columns] + homes + aways + tail
-    df = df[cols]
+    return None
 
-    df.to_csv("espn_nba_team_stats_dataset.csv", index=False, encoding="utf-8")
-    print("salvo espn_nba_team_stats_dataset")
+# Função para buscar estatísticas dos jogadores por jogo
+def get_player_stats(game_id, max_retries=3):
+    url = f"https://api-nba-v1.p.rapidapi.com/players/statistics?game={game_id}"
 
-if __name__ == "__main__":
-    main()
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, headers=headers)
+
+            if response.status_code != 200:
+                print(f"    ⚠️  Erro ao buscar stats: Status {response.status_code}")
+                if response.status_code == 429:
+                    print("    ⚠️  Too Many Requests! Aguardando 60 segundos...")
+                    time.sleep(60)
+                    continue
+
+            return response.json()
+
+        except Exception as e:
+            print(f"    ⚠️  Erro ao buscar stats: {e}")
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 5
+                print(f"    Tentando novamente em {wait_time} segundos...")
+                time.sleep(wait_time)
+
+    return None
+
+# Coletar dados
+all_games = []
+all_player_stats = []
+processed_game_ids = set()
+
+# Começar a buscar jogos a partir de outubro de 2024 até junho 2025 (fim da temporada)
+start_date = datetime(2024, 10, 22)
+end_date = datetime(2025, 6, 30)  # Limite para evitar loop infinito; ajuste se quiser
+current_date = start_date
+
+games_found = {}
+for team in teams_of_interest:
+    games_found[team] = 0
+
+print("Buscando TODOS os jogos dos times de interesse na temporada 2024-2025...")
+print("=" * 50)
+
+consecutive_empty_days = 0
+while current_date <= end_date:
+    date_str = current_date.strftime('%Y-%m-%d')
+    print(f"\n📅 Verificando data: {date_str}")
+
+    # Delay entre requisições
+    time.sleep(2)
+
+    # Buscar jogos da data
+    games_data = get_games_by_date(date_str)
+
+    if games_data and 'results' in games_data:
+        print(f"  → Encontrados {games_data['results']} jogos nesta data")
+
+        if games_data['results'] > 0:
+            consecutive_empty_days = 0
+
+            for game in games_data['response']:
+                # Verificar se é da temporada 2024-2025
+                if game.get('season') == 2024 and game['id'] not in processed_game_ids:
+                    home_team = game['teams']['home']['name']
+                    visitor_team = game['teams']['visitors']['name']
+
+                    # Verificar se pelo menos um time de interesse está no jogo
+                    teams_in_game = []
+                    if home_team in teams_of_interest:
+                        teams_in_game.append(home_team)
+                    if visitor_team in teams_of_interest:
+                        teams_in_game.append(visitor_team)
+
+                    if teams_in_game:
+                        # Adicionar informações do jogo
+                        game_info = {
+                            'game_id': game['id'],
+                            'date': game['date']['start'],
+                            'home_team': home_team,
+                            'visitor_team': visitor_team,
+                            'home_score': game['scores']['home']['points'],
+                            'visitor_score': game['scores']['visitors']['points'],
+                            'arena': game['arena']['name'],
+                            'city': game['arena']['city']
+                        }
+                        all_games.append(game_info)
+                        processed_game_ids.add(game['id'])
+
+                        # Atualizar contadores (sem limite)
+                        for team in teams_in_game:
+                            games_found[team] += 1
+
+                        print(f"  ✅ Jogo encontrado: {visitor_team} @ {home_team}")
+                        print(f"     Contando para: {', '.join(teams_in_game)}")
+
+                        # Buscar estatísticas dos jogadores
+                        print(f"     Buscando estatísticas dos jogadores...")
+                        time.sleep(3)  # Delay para não sobrecarregar
+
+                        player_stats = get_player_stats(game['id'])
+
+                        if player_stats and player_stats['results'] > 0:
+                            print(f"     → {player_stats['results']} jogadores encontrados")
+
+                            for player in player_stats['response']:
+                                player_info = {
+                                    'game_id': game['id'],
+                                    'date': game['date']['start'],
+                                    'player_id': player['player']['id'],
+                                    'player_name': f"{player['player']['firstname']} {player['player']['lastname']}",
+                                    'team': player['team']['name'],
+                                    'position': player.get('pos', ''),
+                                    'minutes': player.get('min', ''),
+                                    'points': player.get('points', 0),
+                                    'fgm': player.get('fgm', 0),
+                                    'fga': player.get('fga', 0),
+                                    'fgp': player.get('fgp', ''),
+                                    'ftm': player.get('ftm', 0),
+                                    'fta': player.get('fta', 0),
+                                    'ftp': player.get('ftp', ''),
+                                    'tpm': player.get('tpm', 0),
+                                    'tpa': player.get('tpa', 0),
+                                    'tpp': player.get('tpp', ''),
+                                    'offReb': player.get('offReb', 0),
+                                    'defReb': player.get('defReb', 0),
+                                    'totReb': player.get('totReb', 0),
+                                    'assists': player.get('assists', 0),
+                                    'steals': player.get('steals', 0),
+                                    'blocks': player.get('blocks', 0),
+                                    'turnovers': player.get('turnovers', 0),
+                                    'pFouls': player.get('pFouls', 0),
+                                    'plusMinus': player.get('plusMinus', '')
+                                }
+                                all_player_stats.append(player_info)
+        else:
+            consecutive_empty_days += 1
+    else:
+        print("  ❌ Nenhuma resposta da API ou erro")
+        consecutive_empty_days += 1
+
+    # Handling de dias vazios
+    if consecutive_empty_days > 7:
+        print("\n⚠️  Muitos dias consecutivos sem jogos. Possível problema na API ou fim da temporada.")
+        print("Aguardando 30 segundos antes de continuar...")
+        time.sleep(30)
+        consecutive_empty_days = 0
+
+    # Avançar para o próximo dia
+    current_date += timedelta(days=1)
+
+    # Status atual (tracking sem limite)
+    print(f"\n📊 Status atual:")
+    for team, count in games_found.items():
+        print(f"  {team}: {count} jogos")
+
+print("\n" + "=" * 50)
+print("RESUMO FINAL:")
+print("=" * 50)
+for team, count in games_found.items():
+    print(f"{team}: {count} jogos")
+
+# Criar DataFrames
+df_games = pd.DataFrame(all_games)
+df_players = pd.DataFrame(all_player_stats)
+
+# Salvar em Excel com timestamp
+timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+games_filename = f'nba_games_2024_2025_full_{timestamp}.xlsx'
+players_filename = f'nba_player_stats_2024_2025_full_{timestamp}.xlsx'
+
+print("\n💾 Salvando arquivos Excel...")
+df_games.to_excel(games_filename, index=False)
+df_players.to_excel(players_filename, index=False)
+
+print(f"\n✅ Arquivos salvos com sucesso!")
+print(f"📋 Arquivo de jogos: {games_filename}")
+print(f"👥 Arquivo de stats: {players_filename}")
+print(f"📋 Total de jogos únicos: {len(all_games)}")
+print(f"👥 Total de estatísticas de jogadores: {len(all_player_stats)}")

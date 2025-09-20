@@ -1,0 +1,20 @@
+# IDE
+.idea/
+
+# Ambientes e cache
+.venv/
+__pycache__/
+cached_data/
+
+# Saídas e artefatos de treino
+catboost_info/
+*.png
+*.html
+
+# Planilhas e dados exportados
+*.xlsx
+~$*.xlsx
+
+# Outros dumps comuns
+*.csv
+*.tsv
