@@ -4,17 +4,18 @@ from catboost import CatBoostClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score, log_loss
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.calibration import calibration_curve
+from sklearn.calibration import calibration_curve, CalibratedClassifierCV
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import shap
 import warnings
+from sklearn.metrics import confusion_matrix, classification_report
 
 warnings.filterwarnings('ignore')
 
 # ===== CONFIGURAÇÃO INICIAL =====
 print("=" * 60)
-print("MODELO DE PREVISÃO NBA - VERSÃO APRIMORADA COM OTW")
+print("MODELO DE PREVISÃO NBA - VERSÃO BALANCEADA")
 print("=" * 60)
 
 # Caminhos dos arquivos
@@ -54,17 +55,6 @@ def calculate_advanced_features(df_games, df_players, window=10):
     """
     features_list = []
 
-    # Criar dicionário para performance de jogadores por time
-    player_stats = {}
-    for _, player in df_players.iterrows():
-        team = player['team']
-        date = player['date']
-        if team not in player_stats:
-            player_stats[team] = {}
-        if date not in player_stats[team]:
-            player_stats[team][date] = []
-        player_stats[team][date].append(player)
-
     print("\n🔄 Calculando features avançadas...")
     total_games = len(df_games)
 
@@ -77,7 +67,6 @@ def calculate_advanced_features(df_games, df_players, window=10):
         visitor_team = game['visitor_team']
 
         # ===== IMPORTANTE: FILTRAR APENAS JOGOS ANTERIORES À DATA ATUAL =====
-        # Isso previne data leakage!
         past_games = df_games[df_games['date'] < game_date]
 
         # Jogos anteriores de cada time
@@ -280,8 +269,14 @@ def calculate_advanced_features(df_games, df_players, window=10):
         features['day_of_week'] = game_date.dayofweek
         features['is_weekend'] = 1 if game_date.dayofweek >= 5 else 0
 
-        # ===== 8. HOME COURT ADVANTAGE =====
-        features['home_advantage'] = 1
+        # ===== 8. NOVAS FEATURES DIFERENCIAIS =====
+        # Diferença de qualidade entre os times
+        features['win_rate_diff'] = features['home_win_rate'] - features['visitor_win_rate']
+        features['net_rating_diff'] = features['home_net_rating'] - features['visitor_net_rating']
+        features['points_diff'] = features['home_avg_points'] - features['visitor_avg_points']
+
+        # Vantagem de descanso
+        features['rest_advantage'] = features['home_rest_days'] - features['visitor_rest_days']
 
         features_list.append(features)
 
@@ -300,7 +295,7 @@ for w in windows:
     df_features_dict[w] = calculate_advanced_features(df_games, df_players, window=w)
     df_features_dict[w] = df_features_dict[w].sort_values('date').reset_index(drop=True)
 
-# Definir features
+# Definir features (REMOVENDO home_advantage)
 numerical_features = [
     'home_win_rate', 'visitor_win_rate',
     'home_avg_points', 'visitor_avg_points',
@@ -313,7 +308,9 @@ numerical_features = [
     'h2h_home_win_rate',
     'home_team_home_win_rate', 'visitor_team_away_win_rate',
     'home_momentum', 'visitor_momentum',
-    'home_advantage'
+    # REMOVIDO: 'home_advantage' - estava enviesando o modelo
+    # NOVAS FEATURES:
+    'win_rate_diff', 'net_rating_diff', 'points_diff', 'rest_advantage'
 ]
 
 categorical_features = ['home_team', 'visitor_team', 'month', 'day_of_week', 'is_weekend']
@@ -342,16 +339,19 @@ for w in windows:
     X_val = val_df[all_features]
     y_val = val_df[target]
 
+    # Usar parâmetros para reduzir overfitting
     cat_model = CatBoostClassifier(
-        iterations=500,
-        depth=6,
-        learning_rate=0.05,
-        l2_leaf_reg=3,
+        iterations=300,  # Reduzido
+        depth=5,  # Profundidade menor
+        learning_rate=0.03,  # Taxa de aprendizado menor
+        l2_leaf_reg=5,  # Mais regularização
         cat_features=categorical_features,
         random_seed=42,
         verbose=False,
         eval_metric='AUC',
-        early_stopping_rounds=50
+        early_stopping_rounds=30,
+        subsample=0.8,  # Subsample para reduzir overfitting
+        colsample_bylevel=0.8
     )
 
     cat_model.fit(
@@ -385,7 +385,6 @@ print(f"Período dos dados: {df_features['date'].min().date()} até {df_features
 print(f"Distribuição do target: {df_features['home_win'].value_counts(normalize=True).to_dict()}")
 
 # ===== SPLIT TEMPORAL CORRETO =====
-# IMPORTANTE: Split por data, não por índice!
 split_date = df_features['date'].quantile(0.8)
 train_mask = df_features['date'] < split_date
 test_mask = df_features['date'] >= split_date
@@ -408,20 +407,22 @@ print(f"  - Numéricas: {len(numerical_features)}")
 print(f"  - Categóricas: {len(categorical_features)}")
 
 # ===== TREINAR MODELOS =====
-print("\n🤖 Treinando modelos com OTW={best_window}...")
+print(f"\n🤖 Treinando modelos com OTW={best_window}...")
 
-# 1. CatBoost
+# 1. CatBoost com parâmetros ajustados
 print("\n1️⃣ CatBoost...")
 cat_model = CatBoostClassifier(
-    iterations=500,
-    depth=6,
-    learning_rate=0.05,
-    l2_leaf_reg=3,
+    iterations=300,
+    depth=5,
+    learning_rate=0.03,
+    l2_leaf_reg=5,
     cat_features=categorical_features,
     random_seed=42,
     verbose=False,
     eval_metric='AUC',
-    early_stopping_rounds=50
+    early_stopping_rounds=30,
+    subsample=0.8,
+    colsample_bylevel=0.8
 )
 
 cat_model.fit(
@@ -476,7 +477,29 @@ for name, (y_pred, y_pred_proba) in models.items():
 
 # Baseline: sempre prever time da casa
 baseline_home = np.ones(len(y_test))
-print(f"\n📊 Baseline (sempre home): {accuracy_score(y_test, baseline_home):.4f}")
+baseline_acc = accuracy_score(y_test, baseline_home)
+print(f"\n📊 Baseline (sempre home): {baseline_acc:.4f}")
+
+# ===== ANALISAR VIÉS =====
+print("\n🔍 Analisando viés do modelo:")
+home_preds = y_pred_proba_cat
+home_win_rate = sum(home_preds > 0.5) / len(home_preds)
+print(f"Percentual de previsões para time da casa: {home_win_rate:.1%}")
+
+# Se ainda estiver muito alto (>65%), aplicar calibração
+if home_win_rate > 0.65:
+    print("⚠️  Viés alto detectado, aplicando calibração...")
+    calibrated_model = CalibratedClassifierCV(cat_model, method='sigmoid', cv='prefit')
+    calibrated_model.fit(X_train, y_train)
+    y_pred_proba_cat = calibrated_model.predict_proba(X_test)[:, 1]
+    y_pred_cat = (y_pred_proba_cat > 0.5).astype(int)
+
+    # Recalcular métricas
+    acc = accuracy_score(y_test, y_pred_cat)
+    auc = roc_auc_score(y_test, y_pred_proba_cat)
+    ll = log_loss(y_test, y_pred_proba_cat)
+
+    print(f"✅ Após calibração - Acurácia: {acc:.4f}, AUC: {auc:.4f}, Log Loss: {ll:.4f}")
 
 # ===== FEATURE IMPORTANCE =====
 print("\n🎯 Top 15 Features Mais Importantes (CatBoost):")
@@ -496,7 +519,7 @@ shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
 plt.savefig('shap_feature_importance.png', dpi=150)
 plt.close()
 
-# Exemplo local para o o primeiro jogo de teste
+# Exemplo local para o primeiro jogo de teste
 shap.initjs()
 force_plot = shap.force_plot(explainer.expected_value, shap_values[0, :], X_test.iloc[0, :], show=False)
 shap.save_html("shap_force_plot.html", force_plot)
@@ -594,7 +617,7 @@ test_df['predicted'] = y_pred_cat
 test_df['date'] = pd.to_datetime(test_df['date']).dt.tz_localize(None)
 
 # Salvar Excel com múltiplas abas
-output_file = f'nba_predictions_otw_{timestamp}.xlsx'
+output_file = f'nba_predictions_balanced_{timestamp}.xlsx'
 with pd.ExcelWriter(output_file) as writer:
     test_df.to_excel(writer, sheet_name='Predictions', index=False)
     feature_importance.to_excel(writer, sheet_name='Feature_Importance', index=False)
@@ -606,7 +629,8 @@ with pd.ExcelWriter(output_file) as writer:
 
     # Resumo do modelo
     summary_data = {
-        'Metric': ['Accuracy', 'AUC-ROC', 'Log Loss', 'Total Games', 'Train Period', 'Test Period', 'Best OTW'],
+        'Metric': ['Accuracy', 'AUC-ROC', 'Log Loss', 'Total Games', 'Train Period', 'Test Period', 'Best OTW',
+                   'Home Prediction Bias'],
         'Value': [
             f"{accuracy_score(y_test, y_pred_cat):.4f}",
             f"{roc_auc_score(y_test, y_pred_proba_cat):.4f}",
@@ -614,7 +638,8 @@ with pd.ExcelWriter(output_file) as writer:
             len(test_df),
             f"{train_df['date'].min().date()} to {train_df['date'].max().date()}",
             f"{test_df['date'].min().date()} to {test_df['date'].max().date()}",
-            str(best_window)
+            str(best_window),
+            f"{home_win_rate:.1%}"
         ]
     }
     pd.DataFrame(summary_data).to_excel(writer, sheet_name='Model_Summary', index=False)
@@ -622,3 +647,16 @@ with pd.ExcelWriter(output_file) as writer:
 print(f"\n✅ Resultados salvos em '{output_file}'")
 print("\n🎉 Análise completa finalizada com sucesso!")
 print("=" * 60)
+
+
+print("\n📌 Matriz de confusão geral (CatBoost):")
+print(confusion_matrix(y_test, y_pred_cat))
+print("\n📌 Relatório de classificação geral:")
+print(classification_report(y_test, y_pred_cat, digits=3))
+
+test_tmp = test_df.copy()
+test_tmp['pred_home_win'] = y_pred_cat
+acc_home_games = (test_tmp[test_tmp['home_win']==1]['pred_home_win']==1).mean()
+acc_away_games = (test_tmp[test_tmp['home_win']==0]['pred_home_win']==0).mean()
+print(f"\nAcurácia quando mandante vence: {acc_home_games:.3f}")
+print(f"Acurácia quando visitante vence: {acc_away_games:.3f}")
