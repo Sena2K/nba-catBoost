@@ -2,95 +2,74 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 import time
-import json
 
-# Configuração da API
 headers = {
     'x-rapidapi-host': 'api-nba-v1.p.rapidapi.com',
     'x-rapidapi-key': '27244be62dmshb2410b2c636a6a7p18e011jsn345988bae2b4'
 }
 
-# Times que queremos buscar
-teams_of_interest = [
-    'Oklahoma City Thunder',
-    'Minnesota Timberwolves',
-    'Indiana Pacers',
-    'New York Knicks',
-    'Toronto Raptors'
-]
+team_codes_of_interest = {'BOS', 'CLE', 'HOU', 'IND', 'LAL', 'PHI', 'LAC', 'MIN', 'NOP', 'OKC'}
 
-# Função para buscar jogos por data com retry
-def get_games_by_date(date, max_retries=3):
+
+def get_games_by_date(date, max_retries=5):  # Aumentei as retentativas
     url = f"https://api-nba-v1.p.rapidapi.com/games?date={date}"
-
+    backoff = 30  # Aumentei o backoff inicial
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, headers=headers)
-
-            if response.status_code != 200:
-                print(f"  ⚠️  Erro na API: Status {response.status_code}")
-                if response.status_code == 429:
-                    print("  ⚠️  Too Many Requests! Aguardando 60 segundos...")
-                    time.sleep(60)
-                    continue
-
-            data = response.json()
-
-            if 'errors' in data and data['errors']:
-                print(f"  ⚠️  Erro na resposta: {data['errors']}")
-
-            return data
-
+            r = requests.get(url, headers=headers, timeout=30)
+            if r.status_code == 429:
+                wait = backoff * (attempt + 1)
+                print(f"  ⚠️  Too Many Requests (429). Aguardando {wait}s...")
+                time.sleep(wait)
+                continue
+            if r.status_code != 200:
+                print(f"  ⚠️  Erro na API: Status {r.status_code}")
+                return None
+            return r.json()
         except Exception as e:
             print(f"  ⚠️  Erro na requisição: {e}")
             if attempt < max_retries - 1:
-                wait_time = (attempt + 1) * 5
-                print(f"  Tentando novamente em {wait_time} segundos...")
-                time.sleep(wait_time)
-
+                wait = backoff * (attempt + 1)
+                print(f"  Tentando novamente em {wait}s...")
+                time.sleep(wait)
     return None
 
-# Função para buscar estatísticas dos jogadores por jogo
-def get_player_stats(game_id, max_retries=3):
-    url = f"https://api-nba-v1.p.rapidapi.com/players/statistics?game={game_id}"
 
+def get_player_stats(game_id, max_retries=5):
+    url = f"https://api-nba-v1.p.rapidapi.com/players/statistics?game={game_id}"
+    backoff = 30
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, headers=headers)
-
-            if response.status_code != 200:
-                print(f"    ⚠️  Erro ao buscar stats: Status {response.status_code}")
-                if response.status_code == 429:
-                    print("    ⚠️  Too Many Requests! Aguardando 60 segundos...")
-                    time.sleep(60)
-                    continue
-
-            return response.json()
-
+            r = requests.get(url, headers=headers, timeout=30)
+            if r.status_code == 429:
+                wait = backoff * (attempt + 1)
+                print(f"    ⚠️  429 em player stats. Aguardando {wait}s...")
+                time.sleep(wait)
+                continue
+            if r.status_code != 200:
+                print(f"    ⚠️  Erro ao buscar stats: Status {r.status_code}")
+                return None
+            return r.json()
         except Exception as e:
             print(f"    ⚠️  Erro ao buscar stats: {e}")
             if attempt < max_retries - 1:
-                wait_time = (attempt + 1) * 5
-                print(f"    Tentando novamente em {wait_time} segundos...")
-                time.sleep(wait_time)
-
+                wait = backoff * (attempt + 1)
+                print(f"    Tentando novamente em {wait}s...")
+                time.sleep(wait)
     return None
 
-# Coletar dados
-all_games = []
-all_player_stats = []
+
+all_games, all_player_stats = [], []
 processed_game_ids = set()
 
-# Começar a buscar jogos a partir de outubro de 2024 até junho 2025 (fim da temporada)
-start_date = datetime(2024, 10, 22)
-end_date = datetime(2025, 6, 30)  # Limite para evitar loop infinito; ajuste se quiser
+# ✅ DATAS CORRIGIDAS: Temporada 2023-24 começou em 24 de outubro
+start_date = datetime(2023, 10, 24)  # Corrigido: primeiro dia da temporada
+end_date = datetime(2024, 4, 16)
+
 current_date = start_date
+games_found = {code: 0 for code in team_codes_of_interest}
 
-games_found = {}
-for team in teams_of_interest:
-    games_found[team] = 0
-
-print("Buscando TODOS os jogos dos times de interesse na temporada 2024-2025...")
+print("Buscando jogos da temporada 2023-24 (outubro/novembro)...")
 print("=" * 50)
 
 consecutive_empty_days = 0
@@ -98,134 +77,97 @@ while current_date <= end_date:
     date_str = current_date.strftime('%Y-%m-%d')
     print(f"\n📅 Verificando data: {date_str}")
 
-    # Delay entre requisições
-    time.sleep(2)
+    # ✅ Delay maior entre requisições de datas
+    time.sleep(3)  # Aumentei para 3 segundos
 
-    # Buscar jogos da data
     games_data = get_games_by_date(date_str)
 
-    if games_data and 'results' in games_data:
+    if games_data and games_data.get('results', 0) > 0:
         print(f"  → Encontrados {games_data['results']} jogos nesta data")
-
-        if games_data['results'] > 0:
-            consecutive_empty_days = 0
-
-            for game in games_data['response']:
-                # Verificar se é da temporada 2024-2025
-                if game.get('season') == 2024 and game['id'] not in processed_game_ids:
-                    home_team = game['teams']['home']['name']
-                    visitor_team = game['teams']['visitors']['name']
-
-                    # Verificar se pelo menos um time de interesse está no jogo
-                    teams_in_game = []
-                    if home_team in teams_of_interest:
-                        teams_in_game.append(home_team)
-                    if visitor_team in teams_of_interest:
-                        teams_in_game.append(visitor_team)
-
-                    if teams_in_game:
-                        # Adicionar informações do jogo
-                        game_info = {
-                            'game_id': game['id'],
-                            'date': game['date']['start'],
-                            'home_team': home_team,
-                            'visitor_team': visitor_team,
-                            'home_score': game['scores']['home']['points'],
-                            'visitor_score': game['scores']['visitors']['points'],
-                            'arena': game['arena']['name'],
-                            'city': game['arena']['city']
-                        }
-                        all_games.append(game_info)
-                        processed_game_ids.add(game['id'])
-
-                        # Atualizar contadores (sem limite)
-                        for team in teams_in_game:
-                            games_found[team] += 1
-
-                        print(f"  ✅ Jogo encontrado: {visitor_team} @ {home_team}")
-                        print(f"     Contando para: {', '.join(teams_in_game)}")
-
-                        # Buscar estatísticas dos jogadores
-                        print(f"     Buscando estatísticas dos jogadores...")
-                        time.sleep(3)  # Delay para não sobrecarregar
-
-                        player_stats = get_player_stats(game['id'])
-
-                        if player_stats and player_stats['results'] > 0:
-                            print(f"     → {player_stats['results']} jogadores encontrados")
-
-                            for player in player_stats['response']:
-                                player_info = {
-                                    'game_id': game['id'],
-                                    'date': game['date']['start'],
-                                    'player_id': player['player']['id'],
-                                    'player_name': f"{player['player']['firstname']} {player['player']['lastname']}",
-                                    'team': player['team']['name'],
-                                    'position': player.get('pos', ''),
-                                    'minutes': player.get('min', ''),
-                                    'points': player.get('points', 0),
-                                    'fgm': player.get('fgm', 0),
-                                    'fga': player.get('fga', 0),
-                                    'fgp': player.get('fgp', ''),
-                                    'ftm': player.get('ftm', 0),
-                                    'fta': player.get('fta', 0),
-                                    'ftp': player.get('ftp', ''),
-                                    'tpm': player.get('tpm', 0),
-                                    'tpa': player.get('tpa', 0),
-                                    'tpp': player.get('tpp', ''),
-                                    'offReb': player.get('offReb', 0),
-                                    'defReb': player.get('defReb', 0),
-                                    'totReb': player.get('totReb', 0),
-                                    'assists': player.get('assists', 0),
-                                    'steals': player.get('steals', 0),
-                                    'blocks': player.get('blocks', 0),
-                                    'turnovers': player.get('turnovers', 0),
-                                    'pFouls': player.get('pFouls', 0),
-                                    'plusMinus': player.get('plusMinus', '')
-                                }
-                                all_player_stats.append(player_info)
-        else:
-            consecutive_empty_days += 1
-    else:
-        print("  ❌ Nenhuma resposta da API ou erro")
-        consecutive_empty_days += 1
-
-    # Handling de dias vazios
-    if consecutive_empty_days > 7:
-        print("\n⚠️  Muitos dias consecutivos sem jogos. Possível problema na API ou fim da temporada.")
-        print("Aguardando 30 segundos antes de continuar...")
-        time.sleep(30)
         consecutive_empty_days = 0
 
-    # Avançar para o próximo dia
+        for game in games_data['response']:
+            if game['id'] in processed_game_ids:
+                continue
+
+            home_code = game['teams']['home']['code']
+            away_code = game['teams']['visitors']['code']
+
+            # Filtra apenas jogos com times de interesse
+            if not ({home_code, away_code} & team_codes_of_interest):
+                continue
+
+            game_info = {
+                'game_id': game['id'],
+                'date': game['date']['start'],
+                'home_team_code': home_code,
+                'away_team_code': away_code,
+                'home_team_name': game['teams']['home']['name'],
+                'away_team_name': game['teams']['visitors']['name'],
+                'home_score': game['scores']['home']['points'],
+                'away_score': game['scores']['visitors']['points'],
+                'arena': (game.get('arena') or {}).get('name'),
+                'city': (game.get('arena') or {}).get('city'),
+                'season': game.get('season')
+            }
+            all_games.append(game_info)
+            processed_game_ids.add(game['id'])
+
+            for code in ({home_code, away_code} & team_codes_of_interest):
+                games_found[code] += 1
+
+            print(f"  ✅ Jogo: {away_code} @ {home_code}")
+
+            # ✅ Delay maior entre requisições de estatísticas
+            time.sleep(3)
+
+            print(f"     Buscando estatísticas dos jogadores...")
+            player_stats = get_player_stats(game['id'])
+
+            if player_stats and player_stats.get('results', 0) > 0:
+                print(f"     → {player_stats['results']} entradas de jogadores")
+                for p in player_stats['response']:
+                    all_player_stats.append({
+                        'game_id': game['id'],
+                        'date': game['date']['start'],
+                        'team_code': p['team']['code'],
+                        'player_id': p['player']['id'],
+                        'player_name': f"{p['player']['firstname']} {p['player']['lastname']}",
+                        'pos': p.get('pos', ''),
+                        'min': p.get('min', ''),
+                        'points': p.get('points', 0),
+                        'fgm': p.get('fgm', 0), 'fga': p.get('fga', 0), 'fgp': p.get('fgp', ''),
+                        'ftm': p.get('ftm', 0), 'fta': p.get('fta', 0), 'ftp': p.get('ftp', ''),
+                        'tpm': p.get('tpm', 0), 'tpa': p.get('tpa', 0), 'tpp': p.get('tpp', ''),
+                        'offReb': p.get('offReb', 0), 'defReb': p.get('defReb', 0), 'totReb': p.get('totReb', 0),
+                        'assists': p.get('assists', 0), 'steals': p.get('steals', 0), 'blocks': p.get('blocks', 0),
+                        'turnovers': p.get('turnovers', 0), 'pFouls': p.get('pFouls', 0),
+                        'plusMinus': p.get('plusMinus', '')
+                    })
+            else:
+                print("     ❌ Não foi possível obter estatísticas")
+    else:
+        print("  ❌ Sem jogos ou erro na API")
+        consecutive_empty_days += 1
+
+    # Status parcial
+    print("\n📊 Status atual:")
+    for code in sorted(team_codes_of_interest):
+        print(f"  {code}: {games_found[code]} jogos")
+
     current_date += timedelta(days=1)
 
-    # Status atual (tracking sem limite)
-    print(f"\n📊 Status atual:")
-    for team, count in games_found.items():
-        print(f"  {team}: {count} jogos")
+# Salvar resultados
+if all_games:
+    df_games = pd.DataFrame(all_games)
+    df_players = pd.DataFrame(all_player_stats)
 
-print("\n" + "=" * 50)
-print("RESUMO FINAL:")
-print("=" * 50)
-for team, count in games_found.items():
-    print(f"{team}: {count} jogos")
+    ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    df_games.to_excel(f"nba_games_{ts}.xlsx", index=False)
+    df_players.to_excel(f"nba_player_stats_{ts}.xlsx", index=False)
 
-# Criar DataFrames
-df_games = pd.DataFrame(all_games)
-df_players = pd.DataFrame(all_player_stats)
-
-# Salvar em Excel com timestamp
-timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-games_filename = f'nba_games_2024_2025_full_{timestamp}.xlsx'
-players_filename = f'nba_player_stats_2024_2025_full_{timestamp}.xlsx'
-
-print("\n💾 Salvando arquivos Excel...")
-df_games.to_excel(games_filename, index=False)
-df_players.to_excel(players_filename, index=False)
-
-print(f"\n✅ Arquivos salvos com sucesso!")
-print(f"📋 Arquivo de jogos: {games_filename}")
-print(f"👥 Arquivo de stats: {players_filename}")
-print(f"📋 Total de jogos únicos: {len(all_games)}")
-print(f"👥 Total de estatísticas de jogadores: {len(all_player_stats)}")
+    print("\n✅ Concluído.")
+    print(f"📋 Total de jogos únicos: {len(df_games)}")
+    print(f"👥 Total de linhas de estatísticas de jogadores: {len(df_players)}")
+else:
+    print("\n❌ Nenhum jogo foi encontrado. Verifique as datas e a conexão com a API.")
