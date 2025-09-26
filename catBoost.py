@@ -12,8 +12,8 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 warnings.filterwarnings('ignore')
 
-print("=" * 60)
-print("MODELO DE PREVISÃO NBA - VERSÃO CORRIGIDA (SEM DATA LEAKAGE)")
+print("= " * 60)
+print("MODELO DE PREVISÃO NBA - COM FEATURES DE JOGADORES")
 print("=" * 60)
 
 games_file = 'nba_games_2025-09-25_01-54-11.xlsx'
@@ -23,20 +23,36 @@ print("\n📊 Carregando dados...")
 df_games = pd.read_excel(games_file)
 df_players = pd.read_excel(players_file)
 
+# CORREÇÃO: Limpar dados dos jogadores - converter colunas numéricas
+numeric_columns = ['min', 'points', 'totReb', 'assists', 'steals', 'blocks', 'turnovers', 'plusMinus', 'fgp', 'tpp',
+                   'ftp']
+
+# Converter colunas numéricas, substituindo valores inválidos por NaN
+for col in numeric_columns:
+    if col in df_players.columns:
+        df_players[col] = pd.to_numeric(df_players[col], errors='coerce')
+
+# Remover linhas com valores NaN nas colunas numéricas essenciais
+df_players = df_players.dropna(subset=['min', 'points'], how='any')
+
+# Preencher outros NaN com 0
+df_players[numeric_columns] = df_players[numeric_columns].fillna(0)
+
 # Datas timezone-aware
 df_games['date'] = pd.to_datetime(df_games['date'], utc=True, errors='coerce')
 df_players['date'] = pd.to_datetime(df_players['date'], utc=True, errors='coerce')
 df_games = df_games.dropna(subset=['date'])
 df_players = df_players.dropna(subset=['date'])
 
-# Temporada regular
+# Temporada regular (corte por data)
 regular_end_date = pd.to_datetime('2025-04-15', utc=True)
 df_games = df_games[df_games['date'] <= regular_end_date].copy()
 df_players = df_players[df_players['date'] <= regular_end_date].copy()
 
 print(f"✅ Dados carregados: {len(df_games)} jogos, {len(df_players)} stats de jogadores")
+print(f"✅ Dados dos jogadores limpos: {len(df_players)} registros válidos")
 
-# Renomear colunas
+# Renomear colunas para um esquema consistente
 df_games = df_games.rename(columns={
     'away_score': 'visitor_score',
     'home_team_code': 'home_team',
@@ -47,27 +63,183 @@ df_games = df_games.rename(columns={
 df_games['home_win'] = (df_games['home_score'] > df_games['visitor_score']).astype(int)
 print(f"✅ Target criado. Distribuição: {df_games['home_win'].value_counts(normalize=True).to_dict()}")
 
+# ============================
+# FUNÇÕES UTILITÁRIAS AUSENTES
+# ============================
+
 def safe_temporal_filter(df, current_date, buffer_days=1):
+    """Filtra dados até uma data segura (anti-leakage)"""
     safe_date = current_date - timedelta(days=buffer_days)
     return df[df['date'] < safe_date]
 
+def exp_decay_weights(dates: pd.Series, ref_date: pd.Timestamp, lam: float = 0.05) -> np.ndarray:
+    """Calcula pesos de decaimento exponencial baseado na diferença de dias"""
+    delta = (ref_date - dates).dt.days.clip(lower=1)
+    w = np.exp(-lam * delta.to_numpy())
+    return w
+
+def wavg(values, weights):
+    """Média ponderada"""
+    values = np.asarray(values, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+    if len(values) == 0 or len(weights) == 0:
+        return 0.0
+    return float(np.average(values, weights=weights))
+
+def wstd(values, weights):
+    """Desvio padrão ponderado"""
+    values = np.asarray(values, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+    if len(values) == 0 or len(weights) == 0:
+        return 0.0
+    m = np.average(values, weights=weights)
+    var = np.average((values - m) ** 2, weights=weights)
+    return float(np.sqrt(var))
+
 def adaptive_otw(team_data, base_window=10, min_window=5, max_window=25):
+    """Janela adaptativa baseada na volatilidade do time"""
     if len(team_data) < base_window:
-        return max(min_window, min(len(team_data), base_window))
-    recent_games = team_data.tail(base_window)
-    if 'net_rating' in recent_games.columns and len(recent_games) >= 5:
-        volatility = recent_games['net_rating'].std()
-        mean_nr = recent_games['net_rating'].mean()
-        thr = abs(mean_nr) * 0.1
-        if volatility > thr:
+        return max(min_window, len(team_data))
+    recent = team_data.tail(base_window).copy()
+    if 'net_rating' in recent.columns and len(recent) >= 5:
+        vol = recent['net_rating'].std()
+        mean_nr = abs(recent['net_rating'].mean())
+        thr = max(1.0, 0.1 * mean_nr)
+        if vol > thr:
             return max(min_window, base_window - 3)
         return min(max_window, base_window + 5)
     return base_window
 
-def calculate_advanced_features_fixed(df_games, df_players, window=10, use_adaptive_otw=True):
+# ============================
+# RESTANTE DO CÓDIGO (igual ao anterior)
+# ============================
+
+# ----------------------------
+# Features de Jogadores (CORRIGIDA)
+# ----------------------------
+def calculate_player_features(df_players, df_games, current_date, team, window_days=30, min_games=5):
+    """Calcula estatísticas agregadas dos jogadores de um time até a data atual"""
+
+    # Filtrar dados históricos do time
+    team_players_history = safe_temporal_filter(df_players, current_date)
+    team_players_history = team_players_history[team_players_history['team_code'] == team]
+
+    if len(team_players_history) == 0:
+        return {}
+
+    # CORREÇÃO: Garantir que temos apenas dados numéricos válidos
+    numeric_cols = ['min', 'points', 'totReb', 'assists', 'steals', 'blocks', 'turnovers', 'plusMinus', 'fgp', 'tpp',
+                    'ftp']
+    for col in numeric_cols:
+        if col in team_players_history.columns:
+            team_players_history[col] = pd.to_numeric(team_players_history[col], errors='coerce')
+
+    # Remover linhas com valores inválidos em colunas essenciais
+    team_players_history = team_players_history.dropna(subset=['min', 'points'], how='any')
+    team_players_history[numeric_cols] = team_players_history[numeric_cols].fillna(0)
+
+    # Últimos N dias
+    date_cutoff = current_date - timedelta(days=window_days)
+    recent_players = team_players_history[team_players_history['date'] >= date_cutoff]
+
+    if len(recent_players) < min_games * 8:  # Mínimo de jogadores por jogo
+        recent_players = team_players_history.tail(min_games * 10)
+
+    if len(recent_players) == 0:
+        return {}
+
+    # Pesos por recência
+    weights = exp_decay_weights(recent_players['date'], current_date, lam=0.1)
+
+    # Agregar estatísticas por jogador primeiro, depois por time
+    player_stats = []
+    for player_id in recent_players['player_id'].unique():
+        player_data = recent_players[recent_players['player_id'] == player_id]
+        if len(player_data) < 3:  # Mínimo de jogos por jogador
+            continue
+
+        player_weights = exp_decay_weights(player_data['date'], current_date, lam=0.1)
+
+        # CORREÇÃO: Garantir que todos os valores são numéricos antes de calcular
+        try:
+            # Estatísticas básicas ponderadas
+            player_stat = {
+                'min_avg': wavg(player_data['min'].astype(float), player_weights),
+                'points_avg': wavg(player_data['points'].astype(float), player_weights),
+                'rebounds_avg': wavg(player_data['totReb'].astype(float), player_weights),
+                'assists_avg': wavg(player_data['assists'].astype(float), player_weights),
+                'steals_avg': wavg(player_data['steals'].astype(float), player_weights),
+                'blocks_avg': wavg(player_data['blocks'].astype(float), player_weights),
+                'turnovers_avg': wavg(player_data['turnovers'].astype(float), player_weights),
+                'plus_minus_avg': wavg(player_data['plusMinus'].astype(float), player_weights),
+                'fgp_avg': wavg(player_data['fgp'].astype(float), player_weights),
+                'tpp_avg': wavg(player_data['tpp'].astype(float), player_weights),
+                'ftp_avg': wavg(player_data['ftp'].astype(float), player_weights),
+                'games_played': len(player_data)
+            }
+            player_stats.append(player_stat)
+        except Exception as e:
+            print(f"⚠️ Erro ao processar jogador {player_id}: {e}")
+            continue
+
+    if len(player_stats) == 0:
+        return {}
+
+    player_df = pd.DataFrame(player_stats)
+
+    # Agregar por time (média dos jogadores, ponderada por minutos/jogos)
+    player_weights = np.array([p['min_avg'] * p['games_played'] for p in player_stats])
+    if player_weights.sum() == 0:
+        player_weights = np.ones(len(player_stats))
+
+    features = {}
+
+    # Estatísticas médias do time
+    for col in player_df.columns:
+        if col != 'games_played':
+            features[f'player_{col}'] = wavg(player_df[col], player_weights)
+
+    # Estatísticas dos principais jogadores (top 5 por minutos)
+    top_players = player_df.nlargest(5, 'min_avg')
+    for i, (_, player) in enumerate(top_players.iterrows(), 1):
+        features[f'top{i}_points'] = player['points_avg']
+        features[f'top{i}_rebounds'] = player['rebounds_avg']
+        features[f'top{i}_assists'] = player['assists_avg']
+        features[f'top{i}_plus_minus'] = player['plus_minus_avg']
+
+    # Variabilidade/consistência do time
+    if len(player_df) > 1 and player_df['points_avg'].mean() > 0:
+        features['player_consistency'] = 1.0 - (player_df['points_avg'].std() / player_df['points_avg'].mean())
+    else:
+        features['player_consistency'] = 0.5
+
+    features['player_depth'] = len([p for p in player_stats if p['points_avg'] > 8.0])  # Jogadores com mais de 8 pts
+
+    # Eficiência ofensiva
+    features['player_offensive_rating'] = (
+            features['player_points_avg'] * features['player_fgp_avg'] / 100.0 +
+            features['player_assists_avg'] * 0.5
+    )
+
+    # Eficiência defensiva
+    features['player_defensive_rating'] = (
+            features['player_steals_avg'] * 2.0 +
+            features['player_blocks_avg'] * 2.0 -
+            features['player_turnovers_avg'] * 0.5
+    )
+
+    return features
+
+
+# ----------------------------
+# Feature factory com jogadores
+# ----------------------------
+def calculate_advanced_features_with_players(df_games, df_players, window=10, use_adaptive_otw=True,
+                                             include_player_features=True):
     features_list = []
 
-    print(f"\n🔄 Calculando features avançadas (window={window}, adaptive={use_adaptive_otw})...")
+    print(
+        f"\n🔄 Calculando features avançadas (window={window}, adaptive={use_adaptive_otw}, players={include_player_features})...")
     total_games = len(df_games)
 
     df_games_sorted = df_games.sort_values('date').reset_index(drop=True)
@@ -118,6 +290,7 @@ def calculate_advanced_features_fixed(df_games, df_players, window=10, use_adapt
         home_prev_games['net_rating'] = home_net_ratings
         visitor_prev_games['net_rating'] = visitor_net_ratings
 
+        # Tamanho de janela
         if use_adaptive_otw:
             home_window = adaptive_otw(home_prev_games, window)
             visitor_window = adaptive_otw(visitor_prev_games, window)
@@ -125,11 +298,15 @@ def calculate_advanced_features_fixed(df_games, df_players, window=10, use_adapt
         else:
             actual_window = window
 
-        home_recent = home_prev_games.tail(actual_window)
-        visitor_recent = visitor_prev_games.tail(actual_window)
+        home_recent = home_prev_games.tail(actual_window).copy()
+        visitor_recent = visitor_prev_games.tail(actual_window).copy()
+
+        # Pesos de recência
+        w_home = exp_decay_weights(home_recent['date'], game_date, lam=0.05)
+        w_vis = exp_decay_weights(visitor_recent['date'], game_date, lam=0.05)
 
         features = {
-            'game_id': game['game_id'],
+            'game_id': game.get('game_id', f'idx_{idx}'),
             'date': game_date,
             'home_team': home_team,
             'visitor_team': visitor_team,
@@ -137,7 +314,7 @@ def calculate_advanced_features_fixed(df_games, df_players, window=10, use_adapt
             'actual_window': actual_window
         }
 
-        # 1) Win rate e pontos
+        # 1) Win rate e pontos (médias ponderadas)
         def acc_points(team_recent, team_name):
             wins = 0
             pts_scored, pts_allowed = [], []
@@ -159,10 +336,17 @@ def calculate_advanced_features_fixed(df_games, df_players, window=10, use_adapt
 
         features['home_win_rate'] = hw / len(home_recent) if len(home_recent) > 0 else 0.5
         features['visitor_win_rate'] = vw / len(visitor_recent) if len(visitor_recent) > 0 else 0.5
-        features['home_avg_points'] = float(np.mean(hps)) if hps else 0.0
-        features['visitor_avg_points'] = float(np.mean(vps)) if vps else 0.0
-        features['home_avg_points_allowed'] = float(np.mean(hpa)) if hpa else 0.0
-        features['visitor_avg_points_allowed'] = float(np.mean(vpa)) if vpa else 0.0
+
+        # Médias ponderadas por recência
+        hps_vals = np.array(hps, dtype=float)
+        hpa_vals = np.array(hpa, dtype=float)
+        vps_vals = np.array(vps, dtype=float)
+        vpa_vals = np.array(vpa, dtype=float)
+
+        features['home_avg_points'] = wavg(hps_vals, w_home) if len(hps_vals) else 0.0
+        features['visitor_avg_points'] = wavg(vps_vals, w_vis) if len(vps_vals) else 0.0
+        features['home_avg_points_allowed'] = wavg(hpa_vals, w_home) if len(hpa_vals) else 0.0
+        features['visitor_avg_points_allowed'] = wavg(vpa_vals, w_vis) if len(vpa_vals) else 0.0
 
         features['home_net_rating'] = features['home_avg_points'] - features['home_avg_points_allowed']
         features['visitor_net_rating'] = features['visitor_avg_points'] - features['visitor_avg_points_allowed']
@@ -216,7 +400,7 @@ def calculate_advanced_features_fixed(df_games, df_players, window=10, use_adapt
         h2h_games = past_games[
             ((past_games['home_team'] == home_team) & (past_games['visitor_team'] == visitor_team)) |
             ((past_games['home_team'] == visitor_team) & (past_games['visitor_team'] == home_team))
-        ].tail(5)
+            ].tail(5)
 
         if len(h2h_games) > 0:
             h2h_home_wins = 0
@@ -288,18 +472,20 @@ def calculate_advanced_features_fixed(df_games, df_players, window=10, use_adapt
 
         # 10) Volatilidade
         if len(home_recent) >= 3:
-            features['home_score_volatility'] = float(np.std([
+            home_pts_series = np.array([
                 g['home_score'] if g['home_team'] == home_team else g['visitor_score']
                 for _, g in home_recent.iterrows()
-            ]))
+            ], dtype=float)
+            features['home_score_volatility'] = wstd(home_pts_series, w_home)
         else:
             features['home_score_volatility'] = 10.0
 
         if len(visitor_recent) >= 3:
-            features['visitor_score_volatility'] = float(np.std([
+            vis_pts_series = np.array([
                 g['home_score'] if g['home_team'] == visitor_team else g['visitor_score']
                 for _, g in visitor_recent.iterrows()
-            ]))
+            ], dtype=float)
+            features['visitor_score_volatility'] = wstd(vis_pts_series, w_vis)
         else:
             features['visitor_score_volatility'] = 10.0
 
@@ -307,50 +493,84 @@ def calculate_advanced_features_fixed(df_games, df_players, window=10, use_adapt
         features['home_off_vs_visitor_def'] = features['home_avg_points'] - features['visitor_avg_points_allowed']
         features['visitor_off_vs_home_def'] = features['visitor_avg_points'] - features['home_avg_points_allowed']
 
+        # 12) FEATURES DE JOGADORES
+        if include_player_features:
+            try:
+                home_player_features = calculate_player_features(df_players, df_games, game_date, home_team)
+                visitor_player_features = calculate_player_features(df_players, df_games, game_date, visitor_team)
+
+                # Adicionar prefixos
+                for key, value in home_player_features.items():
+                    features[f'home_{key}'] = value
+                for key, value in visitor_player_features.items():
+                    features[f'visitor_{key}'] = value
+
+                # Diferenças entre times
+                for key in home_player_features.keys():
+                    home_key = f'home_{key}'
+                    visitor_key = f'visitor_{key}'
+                    if home_key in features and visitor_key in features:
+                        features[f'player_{key}_diff'] = features[home_key] - features[visitor_key]
+
+            except Exception as e:
+                print(f"⚠️ Erro ao calcular features de jogadores: {e}")
+                # Continuar sem features de jogadores
+
         features_list.append(features)
 
     df_feat = pd.DataFrame(features_list)
-    # Limpeza básica
     return df_feat.replace([np.inf, -np.inf], np.nan).dropna()
 
+
+# ----------------------------
+# Validação temporal
+# ----------------------------
 class TemporalValidator:
-    def __init__(self, n_splits=5, test_size=30, gap_days=1):
+    def __init__(self, n_splits=3, embargo_days=1, min_train=50, min_test=10):
         self.n_splits = n_splits
-        self.test_size = test_size
-        self.gap_days = gap_days
+        self.embargo_days = embargo_days
+        self.min_train = min_train
+        self.min_test = min_test
 
     def split(self, df):
+        if 'date' not in df.columns or len(df) == 0:
+            return []
+        df_sorted = df.sort_values('date').reset_index()
+        date_norm = df_sorted['date'].dt.normalize()
+        unique_days = date_norm.unique()
+        if len(unique_days) < self.n_splits + 2:
+            return []
+
+        fold_len = max(1, len(unique_days) // (self.n_splits + 1))
         splits = []
-        df_sorted = df.sort_values('date')
-        total_samples = len(df_sorted)
-        if total_samples < (self.n_splits + 1) * 20:
-            return splits
-        test_samples_per_split = total_samples // (self.n_splits + 1)
 
         for i in range(self.n_splits):
-            test_start_idx = total_samples - (i + 1) * test_samples_per_split
-            test_end_idx = total_samples - i * test_samples_per_split
+            test_start_day = pd.to_datetime(unique_days[-(i + 1) * fold_len])
+            test_end_day = pd.to_datetime(unique_days[-1 - i * fold_len])
 
-            test_indices = df_sorted.index[test_start_idx:test_end_idx]
+            embargo_cut = test_start_day - pd.Timedelta(days=self.embargo_days)
 
-            test_start_date = df_sorted.iloc[test_start_idx]['date']
-            train_cutoff = test_start_date - timedelta(days=self.gap_days)
-            train_indices = df_sorted[df_sorted['date'] < train_cutoff].index
+            train_idx = df_sorted[df_sorted['date'] < embargo_cut]['index']
+            test_idx = df_sorted[(date_norm >= test_start_day) & (date_norm <= test_end_day)]['index']
 
-            if len(train_indices) > 50 and len(test_indices) > 10:
-                splits.append((train_indices, test_indices))
+            if len(train_idx) >= self.min_train and len(test_idx) >= self.min_test:
+                splits.append((train_idx, test_idx))
 
         return splits
 
+
+# ----------------------------
+# Otimização de hiperparâmetros
+# ----------------------------
 print("\n🔍 Otimizando Hiperparâmetros com Validação Temporal...")
 
 configs = [
-    {'window': 8, 'adaptive': False},
-    {'window': 10, 'adaptive': False},
-    {'window': 12, 'adaptive': False},
-    {'window': 15, 'adaptive': False},
-    {'window': 10, 'adaptive': True},
-    {'window': 12, 'adaptive': True}
+    {'window': 8, 'adaptive': False, 'players': True},
+    {'window': 10, 'adaptive': False, 'players': True},
+    {'window': 12, 'adaptive': False, 'players': True},
+    {'window': 15, 'adaptive': False, 'players': True},
+    {'window': 10, 'adaptive': True, 'players': True},
+    {'window': 12, 'adaptive': True, 'players': True}
 ]
 
 best_config = None
@@ -360,16 +580,18 @@ config_results = {}
 for config in configs:
     print(f"\nTestando configuração: {config}")
 
-    df_features = calculate_advanced_features_fixed(
+    df_features = calculate_advanced_features_with_players(
         df_games, df_players,
         window=config['window'],
-        use_adaptive_otw=config['adaptive']
+        use_adaptive_otw=config['adaptive'],
+        include_player_features=config['players']
     )
 
     if len(df_features) < 100:
         print("  ❌ Poucos dados, pulando...")
         continue
 
+    # Definir features base
     numerical_features = [
         'home_win_rate', 'visitor_win_rate',
         'home_avg_points', 'visitor_avg_points',
@@ -388,11 +610,23 @@ for config in configs:
         'home_off_vs_visitor_def', 'visitor_off_vs_home_def'
     ]
 
+    # Adicionar features de jogadores se configurado
+    if config['players']:
+        player_features = [col for col in df_features.columns if col.startswith('home_player_') or
+                           col.startswith('visitor_player_') or col.startswith('player_')]
+        numerical_features.extend(player_features)
+
     categorical_features = ['home_team', 'visitor_team', 'month', 'day_of_week', 'is_weekend', 'season_phase']
     all_features = numerical_features + categorical_features
     target = 'home_win'
 
-    validator = TemporalValidator(n_splits=3, gap_days=1)
+    # Filtrar colunas que existem no dataframe
+    available_features = [f for f in all_features if f in df_features.columns]
+    missing_features = set(all_features) - set(available_features)
+    if missing_features:
+        print(f"  ⚠️ Features faltantes: {missing_features}")
+
+    validator = TemporalValidator(n_splits=3, embargo_days=1)
     splits = validator.split(df_features)
 
     if len(splits) == 0:
@@ -404,9 +638,9 @@ for config in configs:
         train_df = df_features.loc[train_idx]
         val_df = df_features.loc[val_idx]
 
-        X_train = train_df[all_features]
+        X_train = train_df[available_features]
         y_train = train_df[target]
-        X_val = val_df[all_features]
+        X_val = val_df[available_features]
         y_val = val_df[target]
 
         model = CatBoostClassifier(
@@ -414,9 +648,10 @@ for config in configs:
             depth=4,
             learning_rate=0.05,
             l2_leaf_reg=10,
-            cat_features=categorical_features,
+            cat_features=[f for f in categorical_features if f in available_features],
             random_seed=42,
             verbose=False,
+            loss_function='Logloss',
             eval_metric='AUC',
             early_stopping_rounds=20,
             subsample=0.8
@@ -435,20 +670,29 @@ for config in configs:
         best_auc = mean_auc
         best_config = config
 
+if best_config is None:
+    print("⚠️ Nenhuma configuração válida. Usando fallback {'window': 10, 'adaptive': True, 'players': True}.")
+    best_config = {'window': 10, 'adaptive': True, 'players': True}
+
 print(f"\n✅ Melhor configuração: {best_config} (AUC: {best_auc:.4f})")
 
+# ----------------------------
+# Treinamento final
+# ----------------------------
 print("\n🤖 Treinamento final com configuração otimizada...")
 
-df_features_final = calculate_advanced_features_fixed(
+df_features_final = calculate_advanced_features_with_players(
     df_games, df_players,
     window=best_config['window'],
-    use_adaptive_otw=best_config['adaptive']
+    use_adaptive_otw=best_config['adaptive'],
+    include_player_features=True  # Forçando features de jogadores no final
 )
 
 print(f"\n🔍 Dataset final: {len(df_features_final)} jogos")
-print(f"Período: {df_features_final['date'].min().date()} até {df_features_final['date'].max().date()}")
+print(f"Período: {df_features_final['date'].min().date()} até {df_features_final['date'].max().date()})")
 print(f"Distribuição target: {df_features_final['home_win'].value_counts(normalize=True).to_dict()}")
 
+# Definir features base
 numerical_features = [
     'home_win_rate', 'visitor_win_rate',
     'home_avg_points', 'visitor_avg_points',
@@ -467,13 +711,27 @@ numerical_features = [
     'home_off_vs_visitor_def', 'visitor_off_vs_home_def'
 ]
 
+# Adicionar features de jogadores
+player_features = [col for col in df_features_final.columns if col.startswith('home_player_') or
+                   col.startswith('visitor_player_') or col.startswith('player_')]
+numerical_features.extend(player_features)
+
 categorical_features = ['home_team', 'visitor_team', 'month', 'day_of_week', 'is_weekend', 'season_phase']
 all_features = numerical_features + categorical_features
 target = 'home_win'
 
-split_date = df_features_final['date'].quantile(0.8)
+# Filtrar colunas existentes
+available_features = [f for f in all_features if f in df_features_final.columns]
+
+# Split temporal
+split_date = df_features_final['date'].quantile(0.80)
 train_mask = df_features_final['date'] < split_date
-test_mask = df_features_final['date'] >= split_date
+test_mask = ~train_mask
+
+if test_mask.sum() < 100 and len(df_features_final) >= 300:
+    split_date = df_features_final['date'].quantile(0.85)
+    train_mask = df_features_final['date'] < split_date
+    test_mask = ~train_mask
 
 train_df = df_features_final[train_mask]
 test_df = df_features_final[test_mask]
@@ -482,23 +740,29 @@ print(f"\n📅 Split temporal:")
 print(f"Treino: {len(train_df)} jogos ({train_df['date'].min().date()} a {train_df['date'].max().date()})")
 print(f"Teste: {len(test_df)} jogos ({test_df['date'].min().date()} a {test_df['date'].max().date()})")
 
-X_train = train_df[all_features]
+X_train = train_df[available_features]
 y_train = train_df[target]
-X_test = test_df[all_features]
+X_test = test_df[available_features]
 y_test = test_df[target]
+
+# Peso de classe
+pos_rate = float(y_train.mean()) if len(y_train) > 0 else 0.5
+scale_pos_weight = float((1 - pos_rate) / pos_rate) if 0 < pos_rate < 1 else 1.0
 
 final_model = CatBoostClassifier(
     iterations=400,
     depth=5,
     learning_rate=0.03,
     l2_leaf_reg=8,
-    cat_features=categorical_features,
+    cat_features=[f for f in categorical_features if f in available_features],
     random_seed=42,
     verbose=False,
+    loss_function='Logloss',
     eval_metric='AUC',
     early_stopping_rounds=30,
     subsample=0.85,
-    rsm=0.8  # amostragem de colunas correta para CatBoost
+    rsm=0.8,
+    scale_pos_weight=scale_pos_weight
 )
 
 print("Treinando modelo final...")
@@ -522,12 +786,10 @@ print(f"Acurácia: {acc:.4f}")
 print(f"AUC-ROC: {auc:.4f}")
 print(f"Log Loss: {ll:.4f}")
 
-# Baseline correto: classe majoritária
 p = y_test.mean()
-baseline_acc = max(p, 1 - p)
+baseline_acc = max(p, 1 - p) if 0 < p < 1 else 1.0
 print(f"Baseline (classe majoritária): {baseline_acc:.4f}")
 print(f"Melhoria sobre baseline: +{(acc - baseline_acc):.4f}")
-
 # Análise de viés
 home_preds_pct = float((y_pred_proba > 0.5).mean())
 print(f"\nViés do modelo: {home_preds_pct:.1%} previsões para time da casa")
@@ -583,8 +845,7 @@ if home_preds_pct > 0.65 or home_preds_pct < 0.45:
 else:
     print("Sem calibração adicional.")
 
-# Matriz de confusão e relatório
-from sklearn.metrics import ConfusionMatrixDisplay
+
 def avaliar_predictions(y_true, proba, thresh=0.5, titulo="Sem calibração"):
     preds = (proba >= thresh).astype(int)
     cm = confusion_matrix(y_true, preds)
@@ -598,6 +859,7 @@ if calibrated_model is not None:
     avaliar_predictions(y_test, y_pred_proba_cal, 0.5, "Calibrada")
 
 # Importância de features
+fi_df = None
 try:
     importances = final_model.get_feature_importance()
     feat_names = list(X_train.columns)
@@ -633,13 +895,20 @@ except Exception as e:
 # Salvar artefatos
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 try:
-    final_model.save_model(f"catboost_nba_model_{timestamp}.txt")
-    fi_df.to_csv(f"feature_importances_{timestamp}.csv", index=False)
-    df_features_final.to_csv(f"dataset_features_{timestamp}.csv", index=False)
+    model_path = f"catboost_nba_model_{timestamp}.cbm"
+    final_model.save_model(model_path)
+    if fi_df is not None:
+        fi_path = f"feature_importances_{timestamp}.csv"
+        fi_df.to_csv(fi_path, index=False)
+    ds_path = f"dataset_features_{timestamp}.csv"
+    df_features_final.to_csv(ds_path, index=False)
     print(f"\n💾 Artefatos salvos:")
-    print(f"Modelo: catboost_nba_model_{timestamp}.cbm")
-    print(f"Importâncias: feature_importances_{timestamp}.csv")
-    print(f"Dataset de features: dataset_features_{timestamp}.csv")
+    print(f"Modelo: {model_path}")
+    if fi_df is not None:
+        print(f"Importâncias: {fi_path}")
+    else:
+        print("Importâncias: não geradas")
+    print(f"Dataset de features: {ds_path}")
 except Exception as e:
     print(f"Falha ao salvar artefatos: {e}")
 
