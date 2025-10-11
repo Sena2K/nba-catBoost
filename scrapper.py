@@ -8,12 +8,11 @@ headers = {
     'x-rapidapi-key': '27244be62dmshb2410b2c636a6a7p18e011jsn345988bae2b4'
 }
 
-team_codes_of_interest = {'BOS', 'CLE', 'HOU', 'IND', 'LAL', 'PHI', 'LAC', 'MIN', 'NOP', 'OKC'}
 
-
-def get_games_by_date(date, max_retries=5):  # Aumentei as retentativas
+# Removemos o filtro de times específicos para buscar todos os times
+def get_games_by_date(date, max_retries=5):
     url = f"https://api-nba-v1.p.rapidapi.com/games?date={date}"
-    backoff = 30  # Aumentei o backoff inicial
+    backoff = 30
     for attempt in range(max_retries):
         try:
             r = requests.get(url, headers=headers, timeout=30)
@@ -59,32 +58,31 @@ def get_player_stats(game_id, max_retries=5):
     return None
 
 
+# ✅ PERÍODO AMPLIADO: De 2021 até agora
+start_date = datetime(2021, 10, 18)  # Começa em 2021
+end_date = datetime.now()  # Até a data atual
+
 all_games, all_player_stats = [], []
 processed_game_ids = set()
-
-# ✅ DATAS CORRIGIDAS: Temporada 2023-24 começou em 24 de outubro
-start_date = datetime(2023, 10, 24)  # Corrigido: primeiro dia da temporada
-end_date = datetime(2024, 4, 16)
+total_games_found = 0
 
 current_date = start_date
-games_found = {code: 0 for code in team_codes_of_interest}
 
-print("Buscando jogos da temporada 2023-24 (outubro/novembro)...")
-print("=" * 50)
+print(
+    f"Buscando jogos de TODOS os times da NBA de {start_date.strftime('%Y-%m-%d')} até {end_date.strftime('%Y-%m-%d')}")
+print("=" * 60)
 
-consecutive_empty_days = 0
 while current_date <= end_date:
     date_str = current_date.strftime('%Y-%m-%d')
     print(f"\n📅 Verificando data: {date_str}")
 
-    # ✅ Delay maior entre requisições de datas
-    time.sleep(3)  # Aumentei para 3 segundos
+    time.sleep(3)  # Delay entre requisições
 
     games_data = get_games_by_date(date_str)
 
     if games_data and games_data.get('results', 0) > 0:
-        print(f"  → Encontrados {games_data['results']} jogos nesta data")
-        consecutive_empty_days = 0
+        games_count = games_data['results']
+        print(f"  → Encontrados {games_count} jogos nesta data")
 
         for game in games_data['response']:
             if game['id'] in processed_game_ids:
@@ -92,10 +90,6 @@ while current_date <= end_date:
 
             home_code = game['teams']['home']['code']
             away_code = game['teams']['visitors']['code']
-
-            # Filtra apenas jogos com times de interesse
-            if not ({home_code, away_code} & team_codes_of_interest):
-                continue
 
             game_info = {
                 'game_id': game['id'],
@@ -108,18 +102,16 @@ while current_date <= end_date:
                 'away_score': game['scores']['visitors']['points'],
                 'arena': (game.get('arena') or {}).get('name'),
                 'city': (game.get('arena') or {}).get('city'),
-                'season': game.get('season')
+                'season': game.get('season'),
+                'status': game.get('status', {}).get('long')
             }
             all_games.append(game_info)
             processed_game_ids.add(game['id'])
+            total_games_found += 1
 
-            for code in ({home_code, away_code} & team_codes_of_interest):
-                games_found[code] += 1
+            print(f"  ✅ Jogo {total_games_found}: {away_code} @ {home_code}")
 
-            print(f"  ✅ Jogo: {away_code} @ {home_code}")
-
-            # ✅ Delay maior entre requisições de estatísticas
-            time.sleep(3)
+            time.sleep(3)  # Delay entre requisições de estatísticas
 
             print(f"     Buscando estatísticas dos jogadores...")
             player_stats = get_player_stats(game['id'])
@@ -148,12 +140,12 @@ while current_date <= end_date:
                 print("     ❌ Não foi possível obter estatísticas")
     else:
         print("  ❌ Sem jogos ou erro na API")
-        consecutive_empty_days += 1
 
-    # Status parcial
-    print("\n📊 Status atual:")
-    for code in sorted(team_codes_of_interest):
-        print(f"  {code}: {games_found[code]} jogos")
+    # Status parcial a cada 30 dias
+    if (current_date - start_date).days % 30 == 0:
+        print(f"\n📊 Status após {((current_date - start_date).days)} dias:")
+        print(f"  Total de jogos encontrados: {total_games_found}")
+        print(f"  Total de estatísticas de jogadores: {len(all_player_stats)}")
 
     current_date += timedelta(days=1)
 
@@ -163,11 +155,20 @@ if all_games:
     df_players = pd.DataFrame(all_player_stats)
 
     ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    df_games.to_excel(f"nba_games_{ts}.xlsx", index=False)
-    df_players.to_excel(f"nba_player_stats_{ts}.xlsx", index=False)
 
-    print("\n✅ Concluído.")
+    # Salvar em Excel
+    df_games.to_excel(f"nba_all_games_2021_present_{ts}.xlsx", index=False)
+    df_players.to_excel(f"nba_all_player_stats_2021_present_{ts}.xlsx", index=False)
+
+    # Salvar em CSV também (opcional - arquivos menores)
+    df_games.to_csv(f"nba_all_games_2021_present_{ts}.csv", index=False)
+    df_players.to_csv(f"nba_all_player_stats_2021_present_{ts}.csv", index=False)
+
+    print("\n✅ Concluído!")
     print(f"📋 Total de jogos únicos: {len(df_games)}")
     print(f"👥 Total de linhas de estatísticas de jogadores: {len(df_players)}")
+    print(f"💾 Arquivos salvos com timestamp: {ts}")
 else:
     print("\n❌ Nenhum jogo foi encontrado. Verifique as datas e a conexão com a API.")
+
+print(f"\n🎯 Período coberto: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}")
