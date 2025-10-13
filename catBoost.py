@@ -6,51 +6,437 @@ import pandas as pd
 import shap
 from catboost import CatBoostClassifier
 from sklearn.calibration import calibration_curve, CalibratedClassifierCV
-from sklearn.metrics import accuracy_score, roc_auc_score, log_loss
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import (accuracy_score, roc_auc_score, log_loss,
+                             confusion_matrix, classification_report, precision_recall_curve,
+                             auc, f1_score, precision_score, recall_score)
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+import seaborn as sns
+from scipy import stats
 
+# =============================================================================
+# CONFIGURAÇÕES INICIAIS
+# =============================================================================
 warnings.filterwarnings('ignore')
 
 print("= " * 60)
-print("MODELO DE PREVISÃO NBA - COM FEATURES DE JOGADORES")
+print("MODELO DE PREVISÃO NBA - COM FEATURES DE JOGADORES (VERSÃO COMPLETA)")
 print("=" * 60)
 
-games_file = 'nba_all_games_2021_present_2025-09-26_17-45-08.xlsx'
-players_file = 'nba_all_player_stats_2021_present_2025-09-26_17-45-08.xlsx'
+# Fixar seeds para reprodutibilidade
+SEED = 42
+np.random.seed(SEED)
+import random
+random.seed(SEED)
 
-print("\n📊 Carregando dados...")
-df_games = pd.read_excel(games_file)
-df_players = pd.read_excel(players_file)
+# =============================================================================
+# FUNÇÕES AUXILIARES
+# =============================================================================
 
-numeric_columns = ['min', 'points', 'totReb', 'assists', 'steals', 'blocks', 'turnovers', 'plusMinus', 'fgp', 'tpp', 'ftp']
+def generate_requirements():
+    """Gera arquivo requirements.txt para reprodutibilidade"""
+    requirements = """catboost>=1.0.0
+matplotlib>=3.5.0
+numpy>=1.21.0
+pandas>=1.3.0
+scikit-learn>=1.0.0
+shap>=0.40.0
+seaborn>=0.11.0
+scipy>=1.7.0
+openpyxl>=3.0.0
+"""
+    with open('requirements.txt', 'w') as f:
+        f.write(requirements)
+    print("✅ Arquivo requirements.txt gerado")
 
-for col in numeric_columns:
-    if col in df_players.columns:
-        df_players[col] = pd.to_numeric(df_players[col], errors='coerce')
+def purged_kfold_validation(df, n_splits=5, embargo_days=3):
+    """Implementa Purged K-Fold com embargo para dados temporais"""
+    df_sorted = df.sort_values('date').reset_index(drop=True)
+    unique_dates = df_sorted['date'].unique()
+    n_samples = len(df_sorted)
 
-df_players = df_players.dropna(subset=['min', 'points'], how='any')
-df_players[numeric_columns] = df_players[numeric_columns].fillna(0)
+    folds = []
+    for i in range(n_splits):
+        test_start = i * len(unique_dates) // n_splits
+        test_end = (i + 1) * len(unique_dates) // n_splits
+        test_dates = unique_dates[test_start:test_end]
 
-df_games['date'] = pd.to_datetime(df_games['date'], utc=True, errors='coerce')
-df_players['date'] = pd.to_datetime(df_players['date'], utc=True, errors='coerce')
-df_games = df_games.dropna(subset=['date'])
-df_players = df_players.dropna(subset=['date'])
+        # Aplicar embargo
+        embargo_start = test_dates[0] - pd.Timedelta(days=embargo_days)
+        embargo_end = test_dates[-1] + pd.Timedelta(days=embargo_days)
 
-regular_end_date = pd.to_datetime('2025-04-15', utc=True)
-df_games = df_games[df_games['date'] <= regular_end_date].copy()
-df_players = df_players[df_players['date'] <= regular_end_date].copy()
+        train_mask = (df_sorted['date'] < embargo_start) | (df_sorted['date'] > embargo_end)
+        test_mask = df_sorted['date'].isin(test_dates)
 
-print(f"✅ Dados carregados: {len(df_games)} jogos, {len(df_players)} stats de jogadores")
-print(f"✅ Dados dos jogadores limpos: {len(df_players)} registros válidos")
+        train_idx = df_sorted[train_mask].index
+        test_idx = df_sorted[test_mask].index
 
-df_games = df_games.rename(columns={
-    'away_score': 'visitor_score',
-    'home_team_code': 'home_team',
-    'away_team_code': 'visitor_team'
-})
+        if len(train_idx) > 50 and len(test_idx) > 10:
+            folds.append((train_idx, test_idx))
 
-df_games['home_win'] = (df_games['home_score'] > df_games['visitor_score']).astype(int)
-print(f"✅ Target criado. Distribuição: {df_games['home_win'].value_counts(normalize=True).to_dict()}")
+    return folds
+
+def plot_calibration_analysis(y_true, y_pred_proba_raw, y_pred_proba_cal=None, model_name="Modelo"):
+    """Plota análise completa de calibração"""
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+    # Curva de calibração
+    prob_true_raw, prob_pred_raw = calibration_curve(y_true, y_pred_proba_raw, n_bins=10, strategy='quantile')
+
+    axes[0, 0].plot([0, 1], [0, 1], 'k--', label='Perfeitamente calibrado')
+    axes[0, 0].plot(prob_pred_raw, prob_true_raw, 's-', label=f'{model_name} (Bruto)')
+
+    if y_pred_proba_cal is not None:
+        prob_true_cal, prob_pred_cal = calibration_curve(y_true, y_pred_proba_cal, n_bins=10, strategy='quantile')
+        axes[0, 0].plot(prob_pred_cal, prob_true_cal, 's-', label=f'{model_name} (Calibrado)')
+
+    axes[0, 0].set_xlabel('Probabilidade Média Prevista')
+    axes[0, 0].set_ylabel('Fração de Positivos')
+    axes[0, 0].set_title('Curva de Calibração')
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # Histograma das probabilidades
+    axes[0, 1].hist(y_pred_proba_raw, bins=20, alpha=0.7, label='Bruto', color='blue')
+    if y_pred_proba_cal is not None:
+        axes[0, 1].hist(y_pred_proba_cal, bins=20, alpha=0.7, label='Calibrado', color='red')
+    axes[0, 1].set_xlabel('Probabilidade Prevista')
+    axes[0, 1].set_ylabel('Frequência')
+    axes[0, 1].set_title('Distribuição das Probabilidades')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
+
+    # Curva Precision-Recall
+    precision, recall, _ = precision_recall_curve(y_true, y_pred_proba_raw)
+    pr_auc = auc(recall, precision)
+    axes[1, 0].plot(recall, precision, label=f'Bruto (AUC={pr_auc:.3f})')
+
+    if y_pred_proba_cal is not None:
+        precision_cal, recall_cal, _ = precision_recall_curve(y_true, y_pred_proba_cal)
+        pr_auc_cal = auc(recall_cal, precision_cal)
+        axes[1, 0].plot(recall_cal, precision_cal, label=f'Calibrado (AUC={pr_auc_cal:.3f})')
+
+    axes[1, 0].set_xlabel('Recall')
+    axes[1, 0].set_ylabel('Precision')
+    axes[1, 0].set_title('Curva Precision-Recall')
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
+
+    # Lift Chart
+    percentiles = np.linspace(0, 100, 21)
+    thresholds = np.percentile(y_pred_proba_raw, percentiles)
+    lift_values = []
+    for threshold in thresholds[:-1]:
+        pred_pos = y_pred_proba_raw >= threshold
+        if pred_pos.sum() > 0:
+            lift = y_true[pred_pos].mean() / y_true.mean()
+        else:
+            lift = 0
+        lift_values.append(lift)
+
+    axes[1, 1].plot(percentiles[:-1], lift_values, 'o-')
+    axes[1, 1].axhline(1, color='red', linestyle='--', label='Baseline')
+    axes[1, 1].set_xlabel('Percentil')
+    axes[1, 1].set_ylabel('Lift')
+    axes[1, 1].set_title('Gráfico de Lift')
+    axes[1, 1].grid(True, alpha=0.3)
+    axes[1, 1].legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    return fig
+
+def plot_confusion_matrix_analysis(y_true, y_pred, y_pred_cal=None, model_name="Modelo"):
+    """Plota análise detalhada da matriz de confusão"""
+    if y_pred_cal is not None:
+        fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+
+        # Matriz de confusão bruta
+        cm_raw = confusion_matrix(y_true, y_pred)
+        sns.heatmap(cm_raw, annot=True, fmt='d', cmap='Blues', ax=axes[0])
+        axes[0].set_title(f'Matriz de Confusão - {model_name} (Bruto)')
+        axes[0].set_xlabel('Predito')
+        axes[0].set_ylabel('Real')
+
+        # Matriz de confusão calibrada
+        cm_cal = confusion_matrix(y_true, y_pred_cal)
+        sns.heatmap(cm_cal, annot=True, fmt='d', cmap='Blues', ax=axes[1])
+        axes[1].set_title(f'Matriz de Confusão - {model_name} (Calibrado)')
+        axes[1].set_xlabel('Predito')
+        axes[1].set_ylabel('Real')
+    else:
+        fig, ax = plt.subplots(figsize=(8, 6))
+        cm_raw = confusion_matrix(y_true, y_pred)
+        sns.heatmap(cm_raw, annot=True, fmt='d', cmap='Blues', ax=ax)
+        ax.set_title(f'Matriz de Confusão - {model_name}')
+        ax.set_xlabel('Predito')
+        ax.set_ylabel('Real')
+
+    plt.tight_layout()
+    plt.show()
+
+    return fig
+
+def plot_feature_ablation_analysis(model, X, y, feature_groups, model_name="CatBoost"):
+    """Análise de ablação de features por grupos"""
+    baseline_auc = roc_auc_score(y, model.predict_proba(X)[:, 1])
+
+    ablation_results = []
+    for group_name, features in feature_groups.items():
+        features_to_remove = [f for f in features if f in X.columns]
+        if not features_to_remove:
+            continue
+
+        X_ablated = X.drop(columns=features_to_remove)
+
+        # Re-treinar modelo simplificado
+        if model_name == "CatBoost":
+            ablated_model = CatBoostClassifier(
+                iterations=200,
+                depth=4,
+                learning_rate=0.05,
+                random_seed=SEED,
+                verbose=False
+            )
+            cat_features = [f for f in X_ablated.columns if
+                            f in ['home_team', 'visitor_team', 'month', 'day_of_week', 'season_phase']]
+            ablated_model.fit(X_ablated, y, cat_features=cat_features, verbose=False)
+        else:
+            ablated_model = RandomForestClassifier(n_estimators=100, random_state=SEED)
+            ablated_model.fit(X_ablated, y)
+
+        ablated_auc = roc_auc_score(y, ablated_model.predict_proba(X_ablated)[:, 1])
+        performance_drop = baseline_auc - ablated_auc
+
+        ablation_results.append({
+            'feature_group': group_name,
+            'features_removed': len(features_to_remove),
+            'baseline_auc': baseline_auc,
+            'ablated_auc': ablated_auc,
+            'performance_drop': performance_drop
+        })
+
+    ablation_df = pd.DataFrame(ablation_results).sort_values('performance_drop', ascending=False)
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(12, 8))
+    y_pos = np.arange(len(ablation_df))
+
+    ax.barh(y_pos, ablation_df['performance_drop'], color='skyblue')
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(ablation_df['feature_group'])
+    ax.set_xlabel('Queda no AUC')
+    ax.set_title(f'Análise de Ablação de Features - {model_name}\n(AUC Baseline: {baseline_auc:.4f})')
+
+    for i, v in enumerate(ablation_df['performance_drop']):
+        ax.text(v + 0.001, i, f'{v:.4f}', va='center', fontsize=10)
+
+    plt.tight_layout()
+    plt.show()
+
+    return ablation_df
+
+def compare_with_baseline_models(X_train, y_train, X_test, y_test, categorical_features):
+    """Compara CatBoost com modelos baseline"""
+    print("\n" + "=" * 60)
+    print("COMPARAÇÃO COM MODELOS BASELINE")
+    print("=" * 60)
+
+    results = {}
+
+    # 1. Regressão Logística
+    print("📊 Treinando Regressão Logística...")
+    lr = LogisticRegression(random_state=SEED, max_iter=1000)
+
+    # Preparar dados para LR (one-hot encoding para categóricas)
+    X_train_lr = X_train.copy()
+    X_test_lr = X_test.copy()
+
+    for col in categorical_features:
+        if col in X_train_lr.columns:
+            X_train_lr = pd.get_dummies(X_train_lr, columns=[col], prefix=col, drop_first=True)
+            X_test_lr = pd.get_dummies(X_test_lr, columns=[col], prefix=col, drop_first=True)
+
+    # Garantir que train e test tenham as mesmas colunas
+    common_cols = X_train_lr.columns.intersection(X_test_lr.columns)
+    X_train_lr = X_train_lr[common_cols]
+    X_test_lr = X_test_lr[common_cols]
+
+    # Scale features
+    scaler = StandardScaler()
+    X_train_lr_scaled = scaler.fit_transform(X_train_lr)
+    X_test_lr_scaled = scaler.transform(X_test_lr)
+
+    lr.fit(X_train_lr_scaled, y_train)
+    y_pred_lr = lr.predict(X_test_lr_scaled)
+    y_pred_proba_lr = lr.predict_proba(X_test_lr_scaled)[:, 1]
+
+    results['Logistic Regression'] = {
+        'accuracy': accuracy_score(y_test, y_pred_lr),
+        'auc_roc': roc_auc_score(y_test, y_pred_proba_lr),
+        'log_loss': log_loss(y_test, y_pred_proba_lr),
+        'f1': f1_score(y_test, y_pred_lr),
+        'precision': precision_score(y_test, y_pred_lr),
+        'recall': recall_score(y_test, y_pred_lr)
+    }
+
+    # 2. Random Forest
+    print("📊 Treinando Random Forest...")
+    rf = RandomForestClassifier(n_estimators=100, random_state=SEED, n_jobs=-1)
+
+    # Preparar dados para RF (label encoding para categóricas)
+    X_train_rf = X_train.copy()
+    X_test_rf = X_test.copy()
+
+    for col in categorical_features:
+        if col in X_train_rf.columns:
+            X_train_rf[col] = X_train_rf[col].astype('category').cat.codes
+            X_test_rf[col] = X_test_rf[col].astype('category').cat.codes
+
+    rf.fit(X_train_rf, y_train)
+    y_pred_rf = rf.predict(X_test_rf)
+    y_pred_proba_rf = rf.predict_proba(X_test_rf)[:, 1]
+
+    results['Random Forest'] = {
+        'accuracy': accuracy_score(y_test, y_pred_rf),
+        'auc_roc': roc_auc_score(y_test, y_pred_proba_rf),
+        'log_loss': log_loss(y_test, y_pred_proba_rf),
+        'f1': f1_score(y_test, y_pred_rf),
+        'precision': precision_score(y_test, y_pred_rf),
+        'recall': recall_score(y_test, y_pred_rf)
+    }
+
+    # 3. CatBoost (já treinado, vamos apenas calcular métricas)
+    print("📊 Avaliando CatBoost...")
+    # Isso será preenchido depois com o modelo principal
+
+    # Comparação
+    comparison_df = pd.DataFrame(results).T
+    comparison_df = comparison_df.round(4)
+
+    print("\n📈 COMPARAÇÃO DE MODELOS:")
+    print(comparison_df)
+
+    # Plot comparativo
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    metrics = ['accuracy', 'auc_roc', 'log_loss', 'f1', 'precision', 'recall']
+    metric_names = ['Acurácia', 'AUC-ROC', 'Log Loss', 'F1-Score', 'Precision', 'Recall']
+
+    for idx, (metric, name) in enumerate(zip(metrics, metric_names)):
+        ax = axes[idx // 3, idx % 3]
+        values = [results[model][metric] for model in results.keys()]
+
+        if metric == 'log_loss':
+            # Para log loss, menor é melhor
+            bars = ax.bar(results.keys(), values, color=['red' if x == max(values) else 'blue' for x in values])
+            ax.set_ylabel(name)
+            ax.set_title(f'{name} (Menor é Melhor)')
+        else:
+            # Para outras métricas, maior é melhor
+            bars = ax.bar(results.keys(), values, color=['green' if x == max(values) else 'lightblue' for x in values])
+            ax.set_ylabel(name)
+            ax.set_title(f'{name} (Maior é Melhor)')
+
+        # Adicionar valores nas barras
+        for bar, value in zip(bars, values):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2., height,
+                    f'{value:.4f}', ha='center', va='bottom')
+
+        ax.tick_params(axis='x', rotation=45)
+
+    plt.tight_layout()
+    plt.show()
+
+    return results, comparison_df
+
+def plot_comprehensive_analysis(y_true, y_pred_proba, y_pred, model_name="CatBoost"):
+    """Análise compreensiva do modelo"""
+    print(f"\n📊 ANÁLISE COMPREENSIVA - {model_name}")
+    print("=" * 50)
+
+    # 1. Métricas detalhadas
+    accuracy = accuracy_score(y_true, y_pred)
+    auc_roc = roc_auc_score(y_true, y_pred_proba)
+    logloss = log_loss(y_true, y_pred_proba)
+    f1 = f1_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred)
+    recall = recall_score(y_true, y_pred)
+
+    print(f"📈 Métricas de Performance:")
+    print(f"   Acurácia: {accuracy:.4f}")
+    print(f"   AUC-ROC: {auc_roc:.4f}")
+    print(f"   Log Loss: {logloss:.4f}")
+    print(f"   F1-Score: {f1:.4f}")
+    print(f"   Precision: {precision:.4f}")
+    print(f"   Recall: {recall:.4f}")
+
+    # 2. Análise por threshold
+    print(f"\n🎯 Análise por Threshold:")
+    thresholds = [0.4, 0.5, 0.6]
+    for threshold in thresholds:
+        y_pred_thresh = (y_pred_proba >= threshold).astype(int)
+        acc = accuracy_score(y_true, y_pred_thresh)
+        print(f"   Threshold {threshold}: Acurácia = {acc:.4f}")
+
+    # 3. Plot ROC Curve
+    from sklearn.metrics import roc_curve
+    fpr, tpr, _ = roc_curve(y_true, y_pred_proba)
+
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+    # ROC Curve
+    axes[0, 0].plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc_roc:.4f})')
+    axes[0, 0].plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    axes[0, 0].set_xlim([0.0, 1.0])
+    axes[0, 0].set_ylim([0.0, 1.05])
+    axes[0, 0].set_xlabel('False Positive Rate')
+    axes[0, 0].set_ylabel('True Positive Rate')
+    axes[0, 0].set_title('ROC Curve')
+    axes[0, 0].legend(loc="lower right")
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # Distribution of predictions
+    axes[0, 1].hist(y_pred_proba, bins=50, alpha=0.7, color='blue', edgecolor='black')
+    axes[0, 1].axvline(0.5, color='red', linestyle='--', label='Threshold 0.5')
+    axes[0, 1].set_xlabel('Probabilidade Prevista')
+    axes[0, 1].set_ylabel('Frequência')
+    axes[0, 1].set_title('Distribuição das Probabilidades')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
+
+    # Precision-Recall Curve
+    precision_vals, recall_vals, _ = precision_recall_curve(y_true, y_pred_proba)
+    pr_auc = auc(recall_vals, precision_vals)
+    axes[1, 0].plot(recall_vals, precision_vals, color='blue', lw=2, label=f'PR curve (AUC = {pr_auc:.4f})')
+    axes[1, 0].set_xlim([0.0, 1.0])
+    axes[1, 0].set_ylim([0.0, 1.05])
+    axes[1, 0].set_xlabel('Recall')
+    axes[1, 0].set_ylabel('Precision')
+    axes[1, 0].set_title('Precision-Recall Curve')
+    axes[1, 0].legend(loc="lower left")
+    axes[1, 0].grid(True, alpha=0.3)
+
+    # Feature importance (placeholder - será preenchido depois)
+    axes[1, 1].text(0.5, 0.5, 'Feature Importance\n(Será plotado separadamente)',
+                    ha='center', va='center', transform=axes[1, 1].transAxes, fontsize=12)
+    axes[1, 1].set_title('Feature Importance')
+    axes[1, 1].axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+    return {
+        'accuracy': accuracy,
+        'auc': auc_roc,
+        'log_loss': logloss,
+        'f1': f1,
+        'precision': precision,
+        'recall': recall
+    }
 
 def advanced_adaptive_otw(team_data, current_date, team_name, df_players=None):
     BASE_WINDOW = 10
@@ -588,6 +974,102 @@ class TemporalValidator:
 
         return splits
 
+def calcular_acuracia_por_time(test_df, y_test, y_pred):
+    """Calcula acurácia por time"""
+    resultados_time = []
+    test_df_com_pred = test_df.copy()
+    test_df_com_pred['prediction'] = y_pred
+    test_df_com_pred['actual'] = y_test
+    test_df_com_pred['correct'] = (test_df_com_pred['prediction'] == test_df_com_pred['actual']).astype(int)
+    home_teams = test_df_com_pred['home_team'].unique()
+    visitor_teams = test_df_com_pred['visitor_team'].unique()
+    all_teams = set(home_teams) | set(visitor_teams)
+
+    for team in sorted(all_teams):
+        home_games = test_df_com_pred[test_df_com_pred['home_team'] == team]
+        home_correct = home_games['correct'].sum() if len(home_games) > 0 else 0
+        home_total = len(home_games)
+        home_accuracy = home_correct / home_total if home_total > 0 else 0
+        visitor_games = test_df_com_pred[test_df_com_pred['visitor_team'] == team]
+        visitor_correct = visitor_games['correct'].sum() if len(visitor_games) > 0 else 0
+        visitor_total = len(visitor_games)
+        visitor_accuracy = visitor_correct / visitor_total if visitor_total > 0 else 0
+        team_games = test_df_com_pred[
+            (test_df_com_pred['home_team'] == team) |
+            (test_df_com_pred['visitor_team'] == team)
+            ]
+        team_correct = team_games['correct'].sum()
+        team_total = len(team_games)
+        team_accuracy = team_correct / team_total if team_total > 0 else 0
+        resultados_time.append({
+            'time': team,
+            'jogos_como_home': home_total,
+            'acuracia_home': home_accuracy,
+            'jogos_como_visitor': visitor_total,
+            'acuracia_visitor': visitor_accuracy,
+            'total_jogos': team_total,
+            'total_acertos': team_correct,
+            'acuracia_geral_time': team_accuracy
+        })
+
+    return pd.DataFrame(resultados_time)
+
+def avaliar_predictions(y_true, proba, thresh=0.5, titulo="Sem calibração"):
+    """Avalia predictions com threshold específico"""
+    preds = (proba >= thresh).astype(int)
+    cm = confusion_matrix(y_true, preds)
+    print(f"\n🔎 Avaliação {titulo} (threshold={thresh:.2f})")
+    print(cm)
+    print("\nClassification report:")
+    print(classification_report(y_true, preds, digits=4))
+
+# =============================================================================
+# CARREGAMENTO E PRÉ-PROCESSAMENTO DE DADOS
+# =============================================================================
+
+# Carregar dados
+games_file = 'nba_all_games_2021_present_2025-09-26_17-45-08.xlsx'
+players_file = 'nba_all_player_stats_2021_present_2025-09-26_17-45-08.xlsx'
+
+print("\n📊 Carregando dados...")
+df_games = pd.read_excel(games_file)
+df_players = pd.read_excel(players_file)
+
+# Pré-processamento
+numeric_columns = ['min', 'points', 'totReb', 'assists', 'steals', 'blocks', 'turnovers', 'plusMinus', 'fgp', 'tpp', 'ftp']
+
+for col in numeric_columns:
+    if col in df_players.columns:
+        df_players[col] = pd.to_numeric(df_players[col], errors='coerce')
+
+df_players = df_players.dropna(subset=['min', 'points'], how='any')
+df_players[numeric_columns] = df_players[numeric_columns].fillna(0)
+
+df_games['date'] = pd.to_datetime(df_games['date'], utc=True, errors='coerce')
+df_players['date'] = pd.to_datetime(df_players['date'], utc=True, errors='coerce')
+df_games = df_games.dropna(subset=['date'])
+df_players = df_players.dropna(subset=['date'])
+
+regular_end_date = pd.to_datetime('2025-04-15', utc=True)
+df_games = df_games[df_games['date'] <= regular_end_date].copy()
+df_players = df_players[df_players['date'] <= regular_end_date].copy()
+
+print(f"✅ Dados carregados: {len(df_games)} jogos, {len(df_players)} stats de jogadores")
+print(f"✅ Dados dos jogadores limpos: {len(df_players)} registros válidos")
+
+df_games = df_games.rename(columns={
+    'away_score': 'visitor_score',
+    'home_team_code': 'home_team',
+    'away_team_code': 'visitor_team'
+})
+
+df_games['home_win'] = (df_games['home_score'] > df_games['visitor_score']).astype(int)
+print(f"✅ Target criado. Distribuição: {df_games['home_win'].value_counts(normalize=True).to_dict()}")
+
+# =============================================================================
+# OTIMIZAÇÃO DE HIPERPARÂMETROS
+# =============================================================================
+
 print("\n🔍 Otimizando Hiperparâmetros com Validação Temporal...")
 
 configs = [
@@ -677,8 +1159,8 @@ for config in configs:
         )
         model.fit(X_train, y_train, eval_set=(X_val, y_val), verbose=0)
         y_pred_proba = model.predict_proba(X_val)[:, 1]
-        auc = roc_auc_score(y_val, y_pred_proba)
-        fold_aucs.append(auc)
+        auc_score = roc_auc_score(y_val, y_pred_proba)
+        fold_aucs.append(auc_score)
 
     mean_auc = float(np.mean(fold_aucs))
     config_results[str(config)] = {'auc': mean_auc, 'std': float(np.std(fold_aucs))}
@@ -693,6 +1175,11 @@ if best_config is None:
     best_config = {'window': 10, 'adaptive': True, 'players': True}
 
 print(f"\n✅ Melhor configuração: {best_config} (AUC: {best_auc:.4f})")
+
+# =============================================================================
+# TREINAMENTO DO MODELO FINAL
+# =============================================================================
+
 print("\n🤖 Treinamento final com configuração otimizada...")
 
 df_features_final = calculate_advanced_features_with_players(
@@ -780,6 +1267,11 @@ final_model.fit(
 
 y_pred = final_model.predict(X_test)
 y_pred_proba = final_model.predict_proba(X_test)[:, 1]
+
+# =============================================================================
+# ANÁLISE DE CONFIANÇA
+# =============================================================================
+
 cis = []
 for i in range(len(test_df)):
     pred = y_pred_proba[i]
@@ -794,14 +1286,18 @@ for i in range(min(5, len(cis))):
     lower, upper, conf = cis[i]
     print(f"Jogo {i}: Prob {y_pred_proba[i]:.4f} | CI [{lower:.4f}, {upper:.4f}] | Conf {conf:.4f}")
 
+# =============================================================================
+# AVALIAÇÃO DO MODELO
+# =============================================================================
+
 acc = accuracy_score(y_test, y_pred)
-auc = roc_auc_score(y_test, y_pred_proba)
+auc_roc = roc_auc_score(y_test, y_pred_proba)
 ll = log_loss(y_test, y_pred_proba)
 
 print("\n📈 RESULTADOS FINAIS:")
 print("=" * 60)
 print(f"Acurácia: {acc:.4f}")
-print(f"AUC-ROC: {auc:.4f}")
+print(f"AUC-ROC: {auc_roc:.4f}")
 print(f"Log Loss: {ll:.4f}")
 
 p = y_test.mean()
@@ -812,6 +1308,7 @@ print(f"Melhoria sobre baseline: +{(acc - baseline_acc):.4f}")
 home_preds_pct = float((y_pred_proba > 0.5).mean())
 print(f"\nViés do modelo: {home_preds_pct:.1%} previsões para time da casa")
 
+# Calibração
 calibrated_model = None
 y_pred_proba_cal = y_pred_proba
 
@@ -829,13 +1326,13 @@ if home_preds_pct > 0.65 or home_preds_pct < 0.45:
     y_pred_proba_cal = calibrated_model.predict_proba(X_test)[:, 1]
     y_pred_cal = (y_pred_proba_cal >= 0.5).astype(int)
     acc_cal = accuracy_score(y_test, y_pred_cal)
-    auc_cal = roc_auc_score(y_test, y_pred_proba_cal)
+    auc_roc_cal = roc_auc_score(y_test, y_pred_proba_cal)
     ll_cal = log_loss(y_test, y_pred_proba_cal)
 
     print("\n📈 Resultados após calibração isotônica:")
     print("=" * 60)
     print(f"Acurácia calibrada: {acc_cal:.4f}")
-    print(f"AUC-ROC calibrada: {auc_cal:.4f}")
+    print(f"AUC-ROC calibrada: {auc_roc_cal:.4f}")
     print(f"Log Loss calibrado: {ll_cal:.4f}")
 
     try:
@@ -856,17 +1353,14 @@ if home_preds_pct > 0.65 or home_preds_pct < 0.45:
 else:
     print("Sem calibração adicional.")
 
-def avaliar_predictions(y_true, proba, thresh=0.5, titulo="Sem calibração"):
-    preds = (proba >= thresh).astype(int)
-    cm = confusion_matrix(y_true, preds)
-    print(f"\n🔎 Avaliação {titulo} (threshold={thresh:.2f})")
-    print(cm)
-    print("\nClassification report:")
-    print(classification_report(y_true, preds, digits=4))
-
+# Avaliações detalhadas
 avaliar_predictions(y_test, y_pred_proba, 0.5, "Bruta")
 if calibrated_model is not None:
     avaliar_predictions(y_test, y_pred_proba_cal, 0.5, "Calibrada")
+
+# =============================================================================
+# ANÁLISE DE FEATURES
+# =============================================================================
 
 fi_df = None
 try:
@@ -884,6 +1378,7 @@ try:
 except:
     pass
 
+# SHAP analysis
 try:
     n_sample = min(500, len(X_test))
     if n_sample >= 50:
@@ -896,47 +1391,11 @@ try:
 except:
     pass
 
+# =============================================================================
+# ANÁLISE POR TIME
+# =============================================================================
+
 print("\n📊 Calculando acurácia por time...")
-
-def calcular_acuracia_por_time(test_df, y_test, y_pred):
-    resultados_time = []
-    test_df_com_pred = test_df.copy()
-    test_df_com_pred['prediction'] = y_pred
-    test_df_com_pred['actual'] = y_test
-    test_df_com_pred['correct'] = (test_df_com_pred['prediction'] == test_df_com_pred['actual']).astype(int)
-    home_teams = test_df_com_pred['home_team'].unique()
-    visitor_teams = test_df_com_pred['visitor_team'].unique()
-    all_teams = set(home_teams) | set(visitor_teams)
-
-    for team in sorted(all_teams):
-        home_games = test_df_com_pred[test_df_com_pred['home_team'] == team]
-        home_correct = home_games['correct'].sum() if len(home_games) > 0 else 0
-        home_total = len(home_games)
-        home_accuracy = home_correct / home_total if home_total > 0 else 0
-        visitor_games = test_df_com_pred[test_df_com_pred['visitor_team'] == team]
-        visitor_correct = visitor_games['correct'].sum() if len(visitor_games) > 0 else 0
-        visitor_total = len(visitor_games)
-        visitor_accuracy = visitor_correct / visitor_total if visitor_total > 0 else 0
-        team_games = test_df_com_pred[
-            (test_df_com_pred['home_team'] == team) |
-            (test_df_com_pred['visitor_team'] == team)
-            ]
-        team_correct = team_games['correct'].sum()
-        team_total = len(team_games)
-        team_accuracy = team_correct / team_total if team_total > 0 else 0
-        resultados_time.append({
-            'time': team,
-            'jogos_como_home': home_total,
-            'acuracia_home': home_accuracy,
-            'jogos_como_visitor': visitor_total,
-            'acuracia_visitor': visitor_accuracy,
-            'total_jogos': team_total,
-            'total_acertos': team_correct,
-            'acuracia_geral_time': team_accuracy
-        })
-
-    return pd.DataFrame(resultados_time)
-
 df_acuracia_time = calcular_acuracia_por_time(test_df, y_test, y_pred)
 df_acuracia_time = df_acuracia_time.sort_values('acuracia_geral_time', ascending=False)
 
@@ -945,87 +1404,225 @@ print(df_acuracia_time.head(10).to_string(index=False))
 print("\n📉 BOTTOM 10 Times por Acurácia:")
 print(df_acuracia_time.tail(10).to_string(index=False))
 
+# =============================================================================
+# ANÁLISES COMPLEMENTARES
+# =============================================================================
+
+print("\n" + "=" * 80)
+print("ANÁLISES COMPLEMENTARES E COMPARAÇÃO DE MODELOS")
+print("=" * 80)
+
+# 1. Comparação com modelos baseline
+print("\n1. 🔄 COMPARANDO COM MODELOS BASELINE...")
+categorical_features_clean = [f for f in categorical_features if f in available_features]
+baseline_results, comparison_df = compare_with_baseline_models(
+    X_train, y_train, X_test, y_test, categorical_features_clean
+)
+
+# Adicionar CatBoost aos resultados baseline
+y_pred_proba_catboost = final_model.predict_proba(X_test)[:, 1]
+y_pred_catboost = final_model.predict(X_test)
+
+baseline_results['CatBoost'] = {
+    'accuracy': accuracy_score(y_test, y_pred_catboost),
+    'auc_roc': roc_auc_score(y_test, y_pred_proba_catboost),
+    'log_loss': log_loss(y_test, y_pred_proba_catboost),
+    'f1': f1_score(y_test, y_pred_catboost),
+    'precision': precision_score(y_test, y_pred_catboost),
+    'recall': recall_score(y_test, y_pred_catboost)
+}
+
+# 2. Análise compreensiva do CatBoost
+print("\n2. 📊 ANÁLISE COMPREENSIVA DO CATBOOST...")
+catboost_metrics = plot_comprehensive_analysis(
+    y_test, y_pred_proba_catboost, y_pred_catboost, "CatBoost"
+)
+
+# 3. Análise de calibração
+print("\n3. 🎯 ANÁLISE DE CALIBRAÇÃO...")
+plot_calibration_analysis(y_test, y_pred_proba_catboost, None, "CatBoost")
+
+# 4. Matriz de confusão
+print("\n4. 📋 MATRIZ DE CONFUSÃO...")
+plot_confusion_matrix_analysis(y_test, y_pred_catboost, None, "CatBoost")
+
+# 5. Análise de ablação de features
+print("\n5. 🔍 ANÁLISE DE ABLAÇÃO DE FEATURES...")
+feature_groups = {
+    'Estatísticas Básicas': ['home_win_rate', 'visitor_win_rate', 'home_avg_points', 'visitor_avg_points'],
+    'Estatísticas Defensivas': ['home_avg_points_allowed', 'visitor_avg_points_allowed', 'home_net_rating',
+                                'visitor_net_rating'],
+    'Descanso e Agenda': ['home_rest_days', 'visitor_rest_days', 'home_back_to_back', 'visitor_back_to_back'],
+    'Momentum': ['home_streak', 'visitor_streak', 'home_momentum', 'visitor_momentum'],
+    'Head-to-Head': ['h2h_home_win_rate'],
+    'Home/Away Performance': ['home_team_home_win_rate', 'visitor_team_away_win_rate'],
+    'Features de Jogadores': [f for f in available_features if 'player_' in f],
+    'Diferenciais': ['win_rate_diff', 'net_rating_diff', 'points_diff', 'rest_advantage']
+}
+
+# Filtrar apenas features que existem
+filtered_groups = {}
+for group_name, features in feature_groups.items():
+    existing_features = [f for f in features if f in available_features]
+    if existing_features:
+        filtered_groups[group_name] = existing_features
+
+ablation_results = plot_feature_ablation_analysis(final_model, X_train, y_train, filtered_groups, "CatBoost")
+
+# 6. Validação Purged K-Fold
+print("\n6. 🔄 VALIDAÇÃO PURGED K-FOLD...")
+purged_folds = purged_kfold_validation(df_features_final, n_splits=5, embargo_days=3)
+
+if purged_folds:
+    purged_aucs = []
+    for fold, (train_idx, val_idx) in enumerate(purged_folds):
+        print(f"  Fold {fold + 1}/{len(purged_folds)}...")
+
+        X_train_fold = df_features_final.loc[train_idx][available_features]
+        y_train_fold = df_features_final.loc[train_idx][target]
+        X_val_fold = df_features_final.loc[val_idx][available_features]
+        y_val_fold = df_features_final.loc[val_idx][target]
+
+        fold_model = CatBoostClassifier(
+            iterations=200,
+            depth=4,
+            learning_rate=0.05,
+            cat_features=[f for f in categorical_features_clean if f in available_features],
+            random_seed=SEED,
+            verbose=False
+        )
+
+        fold_model.fit(X_train_fold, y_train_fold, verbose=False)
+        y_pred_fold = fold_model.predict_proba(X_val_fold)[:, 1]
+        fold_auc = roc_auc_score(y_val_fold, y_pred_fold)
+        purged_aucs.append(fold_auc)
+
+    print(f"✅ AUC médio Purged K-Fold: {np.mean(purged_aucs):.4f} ± {np.std(purged_aucs):.4f}")
+else:
+    print("❌ Não foi possível realizar Purged K-Fold (poucos dados)")
+
+# =============================================================================
+# SALVAMENTO DE RESULTADOS
+# =============================================================================
+
 acuracia_geral = accuracy_score(y_test, y_pred)
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
 try:
     excel_path = f"resultados_completos_nba_{timestamp}.xlsx"
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+        # 1. Dataset completo com features
         df_features_final.to_excel(writer, sheet_name='dataset_features', index=False)
+
+        # 2. Acurácia por time
         df_acuracia_time.to_excel(writer, sheet_name='acuracia_por_time', index=False)
-        metricas_gerais = pd.DataFrame({
+
+        # 3. Métricas gerais
+        metricas_gerais_data = {
             'Metrica': [
-                'Acurácia Geral',
-                'AUC-ROC',
-                'Log Loss',
-                'Baseline (classe majoritária)',
-                'Melhoria sobre baseline',
-                'Total de Jogos no Teste',
-                'Configuração Otimizada'
+                'Acurácia Geral', 'AUC-ROC', 'Log Loss', 'F1-Score',
+                'Precision', 'Recall', 'Baseline (classe majoritária)',
+                'Melhoria sobre baseline', 'Total de Jogos no Teste',
+                'Configuração Otimizada', 'AUC Purged K-Fold'
             ],
             'Valor': [
-                f"{acuracia_geral:.4f}",
-                f"{auc:.4f}",
-                f"{ll:.4f}",
+                f"{catboost_metrics['accuracy']:.4f}",
+                f"{catboost_metrics['auc']:.4f}",
+                f"{catboost_metrics['log_loss']:.4f}",
+                f"{catboost_metrics['f1']:.4f}",
+                f"{catboost_metrics['precision']:.4f}",
+                f"{catboost_metrics['recall']:.4f}",
                 f"{baseline_acc:.4f}",
-                f"{(acc - baseline_acc):.4f}",
+                f"{(catboost_metrics['accuracy'] - baseline_acc):.4f}",
                 f"{len(test_df)}",
-                str(best_config)
+                str(best_config),
+                f"{np.mean(purged_aucs) if purged_folds else 'N/A':.4f}"
             ]
-        })
-        metricas_gerais.to_excel(writer, sheet_name='metricas_gerais', index=False)
+        }
+        pd.DataFrame(metricas_gerais_data).to_excel(writer, sheet_name='metricas_gerais', index=False)
+
+        # 4. Feature importances
         if fi_df is not None:
             fi_df.to_excel(writer, sheet_name='feature_importances', index=False)
 
-    print(f"\n💾 Arquivo Excel completo salvo: {excel_path}")
+        # 5. Comparação de modelos
+        comparison_df.to_excel(writer, sheet_name='comparacao_modelos')
+
+        # 6. Resultados de ablação
+        ablation_results.to_excel(writer, sheet_name='ablation_analysis', index=False)
+
+        # 7. Métricas detalhadas por threshold
+        thresholds_data = []
+        for threshold in [0.4, 0.45, 0.5, 0.55, 0.6]:
+            y_pred_thresh = (y_pred_proba_catboost >= threshold).astype(int)
+            thresholds_data.append({
+                'threshold': threshold,
+                'accuracy': accuracy_score(y_test, y_pred_thresh),
+                'precision': precision_score(y_test, y_pred_thresh),
+                'recall': recall_score(y_test, y_pred_thresh),
+                'f1': f1_score(y_test, y_pred_thresh)
+            })
+        pd.DataFrame(thresholds_data).to_excel(writer, sheet_name='threshold_analysis', index=False)
+
+    print(f"💾 Arquivo Excel completo salvo: {excel_path}")
     print("   Abas incluídas:")
     print("   - dataset_features: Dataset completo com todas as features")
     print("   - acuracia_por_time: Acurácia detalhada por time")
     print("   - metricas_gerais: Métricas gerais do modelo")
-    print("   - feature_importances: Importância das features (se disponível)")
-except:
-    try:
-        model_path = f"catboost_nba_model_{timestamp}.cbm"
-        final_model.save_model(model_path)
-        if fi_df is not None:
-            fi_path = f"feature_importances_{timestamp}.csv"
-            fi_df.to_csv(fi_path, index=False)
-        ds_path = f"dataset_features_{timestamp}.csv"
-        df_features_final.to_csv(ds_path, index=False)
-        acuracia_path = f"acuracia_por_time_{timestamp}.csv"
-        df_acuracia_time.to_csv(acuracia_path, index=False)
-        print(f"Artefatos salvos individualmente devido ao erro no Excel.")
-    except:
-        pass
+    print("   - feature_importances: Importância das features")
+    print("   - comparacao_modelos: Comparação com modelos baseline")
+    print("   - ablation_analysis: Resultados da ablação de features")
+    print("   - threshold_analysis: Análise por diferentes thresholds")
 
-print("\n" + "=" * 60)
-print(f"📈 ACURÁCIA GERAL DO MODELO: {acuracia_geral:.4f}")
-print("=" * 60)
+except Exception as e:
+    print(f"⚠️ Erro ao salvar Excel: {e}")
 
-print("\n🔍 ANÁLISE DETALHADA POR TIME:")
-print(
-    f"Time com maior acurácia: {df_acuracia_time.iloc[0]['time']} ({df_acuracia_time.iloc[0]['acuracia_geral_time']:.4f})")
-print(
-    f"Time com menor acurácia: {df_acuracia_time.iloc[-1]['time']} ({df_acuracia_time.iloc[-1]['acuracia_geral_time']:.4f})")
-print(f"Média de acurácia entre times: {df_acuracia_time['acuracia_geral_time'].mean():.4f}")
-print(f"Desvio padrão da acurácia: {df_acuracia_time['acuracia_geral_time'].std():.4f}")
+# Salvar gráficos adicionais
+try:
+    # Feature importance gráfico detalhado
+    if fi_df is not None:
+        plt.figure(figsize=(12, 10))
+        top_features = fi_df.head(25)
+        plt.barh(top_features['feature'][::-1], top_features['importance'][::-1])
+        plt.title('Top 25 Feature Importances - CatBoost', fontsize=14)
+        plt.xlabel('Importance', fontsize=12)
+        plt.tight_layout()
+        plt.savefig(f'feature_importance_{timestamp}.png', dpi=300, bbox_inches='tight')
+        plt.show()
 
-threshold_superior = acuracia_geral + 0.1
-threshold_inferior = acuracia_geral - 0.1
-times_melhores = df_acuracia_time[df_acuracia_time['acuracia_geral_time'] > threshold_superior]
-times_piores = df_acuracia_time[df_acuracia_time['acuracia_geral_time'] < threshold_inferior]
+    # SHAP summary plot
+    if len(X_test) >= 100:
+        print("\n📊 Gerando análise SHAP...")
+        sample_idx = np.random.choice(len(X_test), size=min(500, len(X_test)), replace=False)
+        X_sample = X_test.iloc[sample_idx]
+        explainer = shap.TreeExplainer(final_model)
+        shap_values = explainer.shap_values(X_sample)
 
-print(f"\n🎯 Times com performance EXCELENTE (> {threshold_superior:.3f}):")
-if len(times_melhores) > 0:
-    for _, time in times_melhores.iterrows():
-        print(f"  {time['time']}: {time['acuracia_geral_time']:.4f} ({time['total_jogos']} jogos)")
-else:
-    print("  Nenhum time com performance excelente")
+        plt.figure(figsize=(12, 8))
+        shap.summary_plot(shap_values, X_sample, show=False, plot_type='bar', max_display=20)
+        plt.title('SHAP Feature Importance (Global)')
+        plt.tight_layout()
+        plt.savefig(f'shap_summary_{timestamp}.png', dpi=300, bbox_inches='tight')
+        plt.show()
 
-print(f"\n⚠️ Times com performance BAIXA (< {threshold_inferior:.3f}):")
-if len(times_piores) > 0:
-    for _, time in times_piores.iterrows():
-        print(f"  {time['time']}: {time['acuracia_geral_time']:.4f} ({time['total_jogos']} jogos)")
-else:
-    print("  Nenhum time com performance baixa")
+except Exception as e:
+    print(f"⚠️ Erro ao gerar gráficos adicionais: {e}")
 
-print("\n✅ Pipeline concluído com análise detalhada por time!")
+# Gerar requirements
+generate_requirements()
+
+print("\n" + "=" * 80)
+print("✅ PIPELINE COMPLETO CONCLUÍDO!")
+print("=" * 80)
+print(f"📈 Performance Final do CatBoost:")
+print(f"   • Acurácia: {catboost_metrics['accuracy']:.4f}")
+print(f"   • AUC-ROC: {catboost_metrics['auc']:.4f}")
+print(f"   • F1-Score: {catboost_metrics['f1']:.4f}")
+print(f"🎯 Comparação com Baseline:")
+print(f"   • Melhoria: +{(catboost_metrics['accuracy'] - baseline_acc):.4f}")
+print(f"📊 Modelos Comparados: {list(baseline_results.keys())}")
+print(f"💾 Arquivos Salvos:")
+print(f"   • Excel completo: {excel_path}")
+print(f"   • Requirements: requirements.txt")
+print(f"   • Gráficos: feature_importance_{timestamp}.png, shap_summary_{timestamp}.png")
+print("=" * 80)
