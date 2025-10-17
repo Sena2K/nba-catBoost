@@ -53,29 +53,72 @@ openpyxl>=3.0.0
 
 def purged_kfold_validation(df, n_splits=5, embargo_days=3):
     """Implementa Purged K-Fold com embargo para dados temporais"""
+    # Garantir que o DataFrame está ordenado por data e com índice resetado
     df_sorted = df.sort_values('date').reset_index(drop=True)
-    unique_dates = df_sorted['date'].unique()
-    n_samples = len(df_sorted)
+
+    if len(df_sorted) == 0:
+        return []
+
+    # Usar as datas normalizadas para evitar problemas de timezone
+    df_sorted['date_norm'] = df_sorted['date'].dt.normalize()
+    unique_dates = df_sorted['date_norm'].unique()
+
+    if len(unique_dates) < n_splits + 1:
+        print(f"  ⚠️ Poucas datas únicas ({len(unique_dates)}) para {n_splits} splits")
+        return []
 
     folds = []
+    date_ranges = []
+
+    # Determinar os intervalos de datas para cada fold
     for i in range(n_splits):
-        test_start = i * len(unique_dates) // n_splits
-        test_end = (i + 1) * len(unique_dates) // n_splits
-        test_dates = unique_dates[test_start:test_end]
+        test_size = len(unique_dates) // n_splits
+        test_start_idx = i * test_size
+        test_end_idx = (i + 1) * test_size if i < n_splits - 1 else len(unique_dates)
+
+        test_dates = unique_dates[test_start_idx:test_end_idx]
+
+        if len(test_dates) == 0:
+            continue
+
+        test_start_date = pd.to_datetime(test_dates[0])
+        test_end_date = pd.to_datetime(test_dates[-1])
 
         # Aplicar embargo
-        embargo_start = test_dates[0] - pd.Timedelta(days=embargo_days)
-        embargo_end = test_dates[-1] + pd.Timedelta(days=embargo_days)
+        embargo_start = test_start_date - pd.Timedelta(days=embargo_days)
+        embargo_end = test_end_date + pd.Timedelta(days=embargo_days)
 
-        train_mask = (df_sorted['date'] < embargo_start) | (df_sorted['date'] > embargo_end)
-        test_mask = df_sorted['date'].isin(test_dates)
+        date_ranges.append({
+            'fold': i,
+            'test_start': test_start_date,
+            'test_end': test_end_date,
+            'embargo_start': embargo_start,
+            'embargo_end': embargo_end
+        })
 
-        train_idx = df_sorted[train_mask].index
-        test_idx = df_sorted[test_mask].index
+    # Para cada fold, criar máscaras baseadas nas datas
+    for dr in date_ranges:
+        # Train: datas antes do embargo_start OU depois do embargo_end
+        train_mask = (
+                (df_sorted['date_norm'] < dr['embargo_start']) |
+                (df_sorted['date_norm'] > dr['embargo_end'])
+        )
 
-        if len(train_idx) > 50 and len(test_idx) > 10:
+        # Test: datas dentro do período de teste
+        test_mask = (
+                (df_sorted['date_norm'] >= dr['test_start']) &
+                (df_sorted['date_norm'] <= dr['test_end'])
+        )
+
+        train_idx = df_sorted[train_mask].index.tolist()
+        test_idx = df_sorted[test_mask].index.tolist()
+
+        if len(train_idx) >= 50 and len(test_idx) >= 10:
             folds.append((train_idx, test_idx))
+        else:
+            print(f"  ⚠️ Fold {dr['fold']} ignorado: treino={len(train_idx)}, teste={len(test_idx)}")
 
+    print(f"  ✅ {len(folds)} folds válidos criados")
     return folds
 
 def plot_calibration_analysis(y_true, y_pred_proba_raw, y_pred_proba_cal=None, model_name="Modelo"):
@@ -639,7 +682,7 @@ def calculate_player_features(df_players, df_games, current_date, team,
                 'rebounds_avg': wavg(player_data['totReb'].astype(float), player_weights),
                 'assists_avg': wavg(player_data['assists'].astype(float), player_weights),
                 'steals_avg': wavg(player_data['steals'].astype(float), player_weights),
-                'blocks_avg': wavg(player_data['blocks'].astype(float), player_weights),
+                'blocks_avg': wavg(player_data['bvvou ks'].astype(float), player_weights),
                 'turnovers_avg': wavg(player_data['turnovers'].astype(float), player_weights),
                 'plus_minus_avg': wavg(player_data['plusMinus'].astype(float), player_weights),
                 'fgp_avg': wavg(player_data['fgp'].astype(float), player_weights),
@@ -944,6 +987,7 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
     df_feat = pd.DataFrame(features_list)
     return df_feat.replace([np.inf, -np.inf], np.nan).dropna()
 
+
 class TemporalValidator:
     def __init__(self, n_splits=3, embargo_days=1, min_train=50, min_test=10):
         self.n_splits = n_splits
@@ -954,9 +998,12 @@ class TemporalValidator:
     def split(self, df):
         if 'date' not in df.columns or len(df) == 0:
             return []
-        df_sorted = df.sort_values('date').reset_index()
+
+        # Criar uma cópia com índice resetado para trabalhar
+        df_sorted = df.sort_values('date').reset_index(drop=True)
         date_norm = df_sorted['date'].dt.normalize()
         unique_days = date_norm.unique()
+
         if len(unique_days) < self.n_splits + 2:
             return []
 
@@ -964,13 +1011,26 @@ class TemporalValidator:
         splits = []
 
         for i in range(self.n_splits):
-            test_start_day = pd.to_datetime(unique_days[-(i + 1) * fold_len])
-            test_end_day = pd.to_datetime(unique_days[-1 - i * fold_len])
+            test_start_idx = len(unique_days) - (i + 1) * fold_len
+            test_end_idx = len(unique_days) - 1 - i * fold_len
+
+            if test_start_idx < 0 or test_end_idx < 0:
+                continue
+
+            test_start_day = pd.to_datetime(unique_days[test_start_idx])
+            test_end_day = pd.to_datetime(unique_days[test_end_idx])
+
             embargo_cut = test_start_day - pd.Timedelta(days=self.embargo_days)
-            train_idx = df_sorted[df_sorted['date'] < embargo_cut]['index']
-            test_idx = df_sorted[(date_norm >= test_start_day) & (date_norm <= test_end_day)]['index']
+
+            # Usar o índice do DataFrame resetado
+            train_idx = df_sorted[df_sorted['date'] < embargo_cut].index
+            test_idx = df_sorted[
+                (df_sorted['date'] >= test_start_day) &
+                (df_sorted['date'] <= test_end_day)
+                ].index
+
             if len(train_idx) >= self.min_train and len(test_idx) >= self.min_test:
-                splits.append((train_idx, test_idx))
+                splits.append((train_idx.tolist(), test_idx.tolist()))
 
         return splits
 
@@ -1138,8 +1198,8 @@ for config in configs:
 
     fold_aucs = []
     for train_idx, val_idx in splits:
-        train_df = df_features.loc[train_idx]
-        val_df = df_features.loc[val_idx]
+        train_df = df_features.iloc[train_idx]
+        val_df = df_features.iloc[val_idx]
         X_train = train_df[available_features]
         y_train = train_df[target]
         X_val = val_df[available_features]
@@ -1471,17 +1531,26 @@ ablation_results = plot_feature_ablation_analysis(final_model, X_train, y_train,
 
 # 6. Validação Purged K-Fold
 print("\n6. 🔄 VALIDAÇÃO PURGED K-FOLD...")
-purged_folds = purged_kfold_validation(df_features_final, n_splits=5, embargo_days=3)
+
+# Criar uma cópia do DataFrame para trabalhar com índices consistentes
+df_features_final_sorted = df_features_final.sort_values('date').reset_index(drop=True)
+purged_folds = purged_kfold_validation(df_features_final_sorted, n_splits=5, embargo_days=3)
 
 if purged_folds:
     purged_aucs = []
     for fold, (train_idx, val_idx) in enumerate(purged_folds):
         print(f"  Fold {fold + 1}/{len(purged_folds)}...")
 
-        X_train_fold = df_features_final.loc[train_idx][available_features]
-        y_train_fold = df_features_final.loc[train_idx][target]
-        X_val_fold = df_features_final.loc[val_idx][available_features]
-        y_val_fold = df_features_final.loc[val_idx][target]
+        # Usar .iloc para acessar pelas posições, já que resetamos o índice
+        X_train_fold = df_features_final_sorted.iloc[train_idx][available_features]
+        y_train_fold = df_features_final_sorted.iloc[train_idx][target]
+        X_val_fold = df_features_final_sorted.iloc[val_idx][available_features]
+        y_val_fold = df_features_final_sorted.iloc[val_idx][target]
+
+        # Pular fold se não houver dados suficientes
+        if len(X_train_fold) < 50 or len(X_val_fold) < 10:
+            print(f"    ⚠️ Fold {fold + 1} ignorado: dados insuficientes")
+            continue
 
         fold_model = CatBoostClassifier(
             iterations=200,
@@ -1496,11 +1565,14 @@ if purged_folds:
         y_pred_fold = fold_model.predict_proba(X_val_fold)[:, 1]
         fold_auc = roc_auc_score(y_val_fold, y_pred_fold)
         purged_aucs.append(fold_auc)
+        print(f"    Fold {fold + 1} AUC: {fold_auc:.4f}")
 
-    print(f"✅ AUC médio Purged K-Fold: {np.mean(purged_aucs):.4f} ± {np.std(purged_aucs):.4f}")
+    if purged_aucs:
+        print(f"✅ AUC médio Purged K-Fold: {np.mean(purged_aucs):.4f} ± {np.std(purged_aucs):.4f}")
+    else:
+        print("❌ Nenhum fold válido para cálculo do AUC")
 else:
-    print("❌ Não foi possível realizar Purged K-Fold (poucos dados)")
-
+    print("❌ Não foi possível realizar Purged K-Fold (poucos dados ou splits inválidos)")
 # =============================================================================
 # SALVAMENTO DE RESULTADOS
 # =============================================================================
