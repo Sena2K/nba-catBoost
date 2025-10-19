@@ -16,27 +16,18 @@ from sklearn.model_selection import cross_val_score, StratifiedKFold
 import seaborn as sns
 from scipy import stats
 
-# =============================================================================
-# CONFIGURAÇÕES INICIAIS
-# =============================================================================
 warnings.filterwarnings('ignore')
 
 print("= " * 60)
-print("MODELO DE PREVISÃO NBA - COM FEATURES DE JOGADORES (VERSÃO COMPLETA)")
+print("MODELO DE PREVISÃO NBA ")
 print("=" * 60)
 
-# Fixar seeds para reprodutibilidade
 SEED = 42
 np.random.seed(SEED)
 import random
 random.seed(SEED)
 
-# =============================================================================
-# FUNÇÕES AUXILIARES
-# =============================================================================
-
 def generate_requirements():
-    """Gera arquivo requirements.txt para reprodutibilidade"""
     requirements = """catboost>=1.0.0
 matplotlib>=3.5.0
 numpy>=1.21.0
@@ -49,28 +40,24 @@ openpyxl>=3.0.0
 """
     with open('requirements.txt', 'w') as f:
         f.write(requirements)
-    print("✅ Arquivo requirements.txt gerado")
+    print("Arquivo requirements.txt gerado")
 
 def purged_kfold_validation(df, n_splits=5, embargo_days=3):
-    """Implementa Purged K-Fold com embargo para dados temporais"""
-    # Garantir que o DataFrame está ordenado por data e com índice resetado
     df_sorted = df.sort_values('date').reset_index(drop=True)
 
     if len(df_sorted) == 0:
         return []
 
-    # Usar as datas normalizadas para evitar problemas de timezone
     df_sorted['date_norm'] = df_sorted['date'].dt.normalize()
     unique_dates = df_sorted['date_norm'].unique()
 
     if len(unique_dates) < n_splits + 1:
-        print(f"  ⚠️ Poucas datas únicas ({len(unique_dates)}) para {n_splits} splits")
+        print(f"  Poucas datas únicas ({len(unique_dates)}) para {n_splits} splits")
         return []
 
     folds = []
     date_ranges = []
 
-    # Determinar os intervalos de datas para cada fold
     for i in range(n_splits):
         test_size = len(unique_dates) // n_splits
         test_start_idx = i * test_size
@@ -84,7 +71,6 @@ def purged_kfold_validation(df, n_splits=5, embargo_days=3):
         test_start_date = pd.to_datetime(test_dates[0])
         test_end_date = pd.to_datetime(test_dates[-1])
 
-        # Aplicar embargo
         embargo_start = test_start_date - pd.Timedelta(days=embargo_days)
         embargo_end = test_end_date + pd.Timedelta(days=embargo_days)
 
@@ -96,15 +82,11 @@ def purged_kfold_validation(df, n_splits=5, embargo_days=3):
             'embargo_end': embargo_end
         })
 
-    # Para cada fold, criar máscaras baseadas nas datas
     for dr in date_ranges:
-        # Train: datas antes do embargo_start OU depois do embargo_end
         train_mask = (
                 (df_sorted['date_norm'] < dr['embargo_start']) |
                 (df_sorted['date_norm'] > dr['embargo_end'])
         )
-
-        # Test: datas dentro do período de teste
         test_mask = (
                 (df_sorted['date_norm'] >= dr['test_start']) &
                 (df_sorted['date_norm'] <= dr['test_end'])
@@ -118,14 +100,12 @@ def purged_kfold_validation(df, n_splits=5, embargo_days=3):
         else:
             print(f"  ⚠️ Fold {dr['fold']} ignorado: treino={len(train_idx)}, teste={len(test_idx)}")
 
-    print(f"  ✅ {len(folds)} folds válidos criados")
+    print(f"  {len(folds)} folds válidos criados")
     return folds
 
 def plot_calibration_analysis(y_true, y_pred_proba_raw, y_pred_proba_cal=None, model_name="Modelo"):
-    """Plota análise completa de calibração"""
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
 
-    # Curva de calibração
     prob_true_raw, prob_pred_raw = calibration_curve(y_true, y_pred_proba_raw, n_bins=10, strategy='quantile')
 
     axes[0, 0].plot([0, 1], [0, 1], 'k--', label='Perfeitamente calibrado')
@@ -141,7 +121,6 @@ def plot_calibration_analysis(y_true, y_pred_proba_raw, y_pred_proba_cal=None, m
     axes[0, 0].legend()
     axes[0, 0].grid(True, alpha=0.3)
 
-    # Histograma das probabilidades
     axes[0, 1].hist(y_pred_proba_raw, bins=20, alpha=0.7, label='Bruto', color='blue')
     if y_pred_proba_cal is not None:
         axes[0, 1].hist(y_pred_proba_cal, bins=20, alpha=0.7, label='Calibrado', color='red')
@@ -151,7 +130,6 @@ def plot_calibration_analysis(y_true, y_pred_proba_raw, y_pred_proba_cal=None, m
     axes[0, 1].legend()
     axes[0, 1].grid(True, alpha=0.3)
 
-    # Curva Precision-Recall
     precision, recall, _ = precision_recall_curve(y_true, y_pred_proba_raw)
     pr_auc = auc(recall, precision)
     axes[1, 0].plot(recall, precision, label=f'Bruto (AUC={pr_auc:.3f})')
@@ -167,7 +145,6 @@ def plot_calibration_analysis(y_true, y_pred_proba_raw, y_pred_proba_cal=None, m
     axes[1, 0].legend()
     axes[1, 0].grid(True, alpha=0.3)
 
-    # Lift Chart
     percentiles = np.linspace(0, 100, 21)
     thresholds = np.percentile(y_pred_proba_raw, percentiles)
     lift_values = []
@@ -193,18 +170,15 @@ def plot_calibration_analysis(y_true, y_pred_proba_raw, y_pred_proba_cal=None, m
     return fig
 
 def plot_confusion_matrix_analysis(y_true, y_pred, y_pred_cal=None, model_name="Modelo"):
-    """Plota análise detalhada da matriz de confusão"""
     if y_pred_cal is not None:
         fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 
-        # Matriz de confusão bruta
         cm_raw = confusion_matrix(y_true, y_pred)
         sns.heatmap(cm_raw, annot=True, fmt='d', cmap='Blues', ax=axes[0])
         axes[0].set_title(f'Matriz de Confusão - {model_name} (Bruto)')
         axes[0].set_xlabel('Predito')
         axes[0].set_ylabel('Real')
 
-        # Matriz de confusão calibrada
         cm_cal = confusion_matrix(y_true, y_pred_cal)
         sns.heatmap(cm_cal, annot=True, fmt='d', cmap='Blues', ax=axes[1])
         axes[1].set_title(f'Matriz de Confusão - {model_name} (Calibrado)')
@@ -224,10 +198,10 @@ def plot_confusion_matrix_analysis(y_true, y_pred, y_pred_cal=None, model_name="
     return fig
 
 def plot_feature_ablation_analysis(model, X, y, feature_groups, model_name="CatBoost"):
-    """Análise de ablação de features por grupos"""
     baseline_auc = roc_auc_score(y, model.predict_proba(X)[:, 1])
 
     ablation_results = []
+
     for group_name, features in feature_groups.items():
         features_to_remove = [f for f in features if f in X.columns]
         if not features_to_remove:
@@ -235,7 +209,6 @@ def plot_feature_ablation_analysis(model, X, y, feature_groups, model_name="CatB
 
         X_ablated = X.drop(columns=features_to_remove)
 
-        # Re-treinar modelo simplificado
         if model_name == "CatBoost":
             ablated_model = CatBoostClassifier(
                 iterations=200,
@@ -264,10 +237,8 @@ def plot_feature_ablation_analysis(model, X, y, feature_groups, model_name="CatB
 
     ablation_df = pd.DataFrame(ablation_results).sort_values('performance_drop', ascending=False)
 
-    # Plot
     fig, ax = plt.subplots(figsize=(12, 8))
     y_pos = np.arange(len(ablation_df))
-
     ax.barh(y_pos, ablation_df['performance_drop'], color='skyblue')
     ax.set_yticks(y_pos)
     ax.set_yticklabels(ablation_df['feature_group'])
@@ -282,19 +253,16 @@ def plot_feature_ablation_analysis(model, X, y, feature_groups, model_name="CatB
 
     return ablation_df
 
-def compare_with_baseline_models(X_train, y_train, X_test, y_test, categorical_features):
-    """Compara CatBoost com modelos baseline"""
+def compare_with_baseline_models(X_train, y_train, X_test, y_test, categorical_features, catboost_model):
     print("\n" + "=" * 60)
     print("COMPARAÇÃO COM MODELOS BASELINE")
     print("=" * 60)
 
     results = {}
 
-    # 1. Regressão Logística
-    print("📊 Treinando Regressão Logística...")
+    print("Treinando Regressão Logística...")
     lr = LogisticRegression(random_state=SEED, max_iter=1000)
 
-    # Preparar dados para LR (one-hot encoding para categóricas)
     X_train_lr = X_train.copy()
     X_test_lr = X_test.copy()
 
@@ -303,12 +271,10 @@ def compare_with_baseline_models(X_train, y_train, X_test, y_test, categorical_f
             X_train_lr = pd.get_dummies(X_train_lr, columns=[col], prefix=col, drop_first=True)
             X_test_lr = pd.get_dummies(X_test_lr, columns=[col], prefix=col, drop_first=True)
 
-    # Garantir que train e test tenham as mesmas colunas
     common_cols = X_train_lr.columns.intersection(X_test_lr.columns)
     X_train_lr = X_train_lr[common_cols]
     X_test_lr = X_test_lr[common_cols]
 
-    # Scale features
     scaler = StandardScaler()
     X_train_lr_scaled = scaler.fit_transform(X_train_lr)
     X_test_lr_scaled = scaler.transform(X_test_lr)
@@ -326,11 +292,9 @@ def compare_with_baseline_models(X_train, y_train, X_test, y_test, categorical_f
         'recall': recall_score(y_test, y_pred_lr)
     }
 
-    # 2. Random Forest
-    print("📊 Treinando Random Forest...")
+    print("Treinando Random Forest...")
     rf = RandomForestClassifier(n_estimators=100, random_state=SEED, n_jobs=-1)
 
-    # Preparar dados para RF (label encoding para categóricas)
     X_train_rf = X_train.copy()
     X_test_rf = X_test.copy()
 
@@ -352,18 +316,25 @@ def compare_with_baseline_models(X_train, y_train, X_test, y_test, categorical_f
         'recall': recall_score(y_test, y_pred_rf)
     }
 
-    # 3. CatBoost (já treinado, vamos apenas calcular métricas)
-    print("📊 Avaliando CatBoost...")
-    # Isso será preenchido depois com o modelo principal
+    print("Avaliando CatBoost...")
+    y_pred_cat = catboost_model.predict(X_test)
+    y_pred_proba_cat = catboost_model.predict_proba(X_test)[:, 1]
 
-    # Comparação
+    results['CatBoost'] = {
+        'accuracy': accuracy_score(y_test, y_pred_cat),
+        'auc_roc': roc_auc_score(y_test, y_pred_proba_cat),
+        'log_loss': log_loss(y_test, y_pred_proba_cat),
+        'f1': f1_score(y_test, y_pred_cat),
+        'precision': precision_score(y_test, y_pred_cat),
+        'recall': recall_score(y_test, y_pred_cat)
+    }
+
     comparison_df = pd.DataFrame(results).T
     comparison_df = comparison_df.round(4)
 
     print("\n📈 COMPARAÇÃO DE MODELOS:")
     print(comparison_df)
 
-    # Plot comparativo
     fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     metrics = ['accuracy', 'auc_roc', 'log_loss', 'f1', 'precision', 'recall']
     metric_names = ['Acurácia', 'AUC-ROC', 'Log Loss', 'F1-Score', 'Precision', 'Recall']
@@ -373,17 +344,14 @@ def compare_with_baseline_models(X_train, y_train, X_test, y_test, categorical_f
         values = [results[model][metric] for model in results.keys()]
 
         if metric == 'log_loss':
-            # Para log loss, menor é melhor
             bars = ax.bar(results.keys(), values, color=['red' if x == max(values) else 'blue' for x in values])
             ax.set_ylabel(name)
             ax.set_title(f'{name} (Menor é Melhor)')
         else:
-            # Para outras métricas, maior é melhor
             bars = ax.bar(results.keys(), values, color=['green' if x == max(values) else 'lightblue' for x in values])
             ax.set_ylabel(name)
             ax.set_title(f'{name} (Maior é Melhor)')
 
-        # Adicionar valores nas barras
         for bar, value in zip(bars, values):
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width() / 2., height,
@@ -397,11 +365,9 @@ def compare_with_baseline_models(X_train, y_train, X_test, y_test, categorical_f
     return results, comparison_df
 
 def plot_comprehensive_analysis(y_true, y_pred_proba, y_pred, model_name="CatBoost"):
-    """Análise compreensiva do modelo"""
     print(f"\n📊 ANÁLISE COMPREENSIVA - {model_name}")
     print("=" * 50)
 
-    # 1. Métricas detalhadas
     accuracy = accuracy_score(y_true, y_pred)
     auc_roc = roc_auc_score(y_true, y_pred_proba)
     logloss = log_loss(y_true, y_pred_proba)
@@ -417,7 +383,6 @@ def plot_comprehensive_analysis(y_true, y_pred_proba, y_pred, model_name="CatBoo
     print(f"   Precision: {precision:.4f}")
     print(f"   Recall: {recall:.4f}")
 
-    # 2. Análise por threshold
     print(f"\n🎯 Análise por Threshold:")
     thresholds = [0.4, 0.5, 0.6]
     for threshold in thresholds:
@@ -425,13 +390,11 @@ def plot_comprehensive_analysis(y_true, y_pred_proba, y_pred, model_name="CatBoo
         acc = accuracy_score(y_true, y_pred_thresh)
         print(f"   Threshold {threshold}: Acurácia = {acc:.4f}")
 
-    # 3. Plot ROC Curve
     from sklearn.metrics import roc_curve
     fpr, tpr, _ = roc_curve(y_true, y_pred_proba)
 
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
 
-    # ROC Curve
     axes[0, 0].plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc_roc:.4f})')
     axes[0, 0].plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
     axes[0, 0].set_xlim([0.0, 1.0])
@@ -442,7 +405,6 @@ def plot_comprehensive_analysis(y_true, y_pred_proba, y_pred, model_name="CatBoo
     axes[0, 0].legend(loc="lower right")
     axes[0, 0].grid(True, alpha=0.3)
 
-    # Distribution of predictions
     axes[0, 1].hist(y_pred_proba, bins=50, alpha=0.7, color='blue', edgecolor='black')
     axes[0, 1].axvline(0.5, color='red', linestyle='--', label='Threshold 0.5')
     axes[0, 1].set_xlabel('Probabilidade Prevista')
@@ -451,7 +413,6 @@ def plot_comprehensive_analysis(y_true, y_pred_proba, y_pred, model_name="CatBoo
     axes[0, 1].legend()
     axes[0, 1].grid(True, alpha=0.3)
 
-    # Precision-Recall Curve
     precision_vals, recall_vals, _ = precision_recall_curve(y_true, y_pred_proba)
     pr_auc = auc(recall_vals, precision_vals)
     axes[1, 0].plot(recall_vals, precision_vals, color='blue', lw=2, label=f'PR curve (AUC = {pr_auc:.4f})')
@@ -463,7 +424,6 @@ def plot_comprehensive_analysis(y_true, y_pred_proba, y_pred, model_name="CatBoo
     axes[1, 0].legend(loc="lower left")
     axes[1, 0].grid(True, alpha=0.3)
 
-    # Feature importance (placeholder - será preenchido depois)
     axes[1, 1].text(0.5, 0.5, 'Feature Importance\n(Será plotado separadamente)',
                     ha='center', va='center', transform=axes[1, 1].transAxes, fontsize=12)
     axes[1, 1].set_title('Feature Importance')
@@ -481,7 +441,66 @@ def plot_comprehensive_analysis(y_true, y_pred_proba, y_pred, model_name="CatBoo
         'recall': recall
     }
 
+def calculate_otw_horvat_method(team_data, team_name):
+    """
+    Implementa OTW segundo Horvat (2023):
+    Testa 3 janelas e escolhe aquela com MÁXIMA correlação
+    entre efficiency_index e relative_score.
+    """
+    if len(team_data) < 4:
+        return len(team_data)
+
+    def get_relative_scores(data, tname):
+        scores = []
+        for _, game in data.iterrows():
+            if game['home_team'] == tname:
+                rel_score = game['home_score'] - game['visitor_score']
+            else:
+                rel_score = game['visitor_score'] - game['home_score']
+            scores.append(rel_score)
+        return np.array(scores, dtype=float)
+
+    candidates = {
+        'full': len(team_data),
+        'half': max(3, len(team_data) // 2),
+        'quarter': max(3, len(team_data) // 4)
+    }
+
+    best_window = len(team_data)
+    best_corr = -999
+
+    for label, window_size in candidates.items():
+        if window_size < 3 or window_size > len(team_data):
+            continue
+
+        subset = team_data.tail(window_size)
+        efficiency_index = subset['net_rating'].mean()
+        rel_scores = get_relative_scores(subset, team_name)
+
+        if len(rel_scores) > 1 and np.std(rel_scores) > 0:
+            efficiency_array = np.full_like(rel_scores, efficiency_index)
+            corr = np.corrcoef(efficiency_array, rel_scores)[0, 1]
+
+            if not np.isnan(corr) and corr > best_corr:
+                best_corr = corr
+                best_window = window_size
+
+    return int(best_window)
+
+def horvat_otw_optimization(team_data, team_name, current_date, method='correlation'):
+    """
+    Implementação do método OTW proposto por Horvat (2023)
+    """
+    if method == 'correlation':
+        return calculate_otw_horvat_method(team_data, team_name)
+    else:
+        # Fallback para método de correlação se predictive não estiver disponível
+        return calculate_otw_horvat_method(team_data, team_name)
+
 def advanced_adaptive_otw(team_data, current_date, team_name, df_players=None):
+    """
+    Implementação expandida da OTW adaptativa com múltiplas heurísticas
+    """
     BASE_WINDOW = 10
     MIN_WINDOW = 5
     MAX_WINDOW = 20
@@ -507,8 +526,10 @@ def advanced_adaptive_otw(team_data, current_date, team_name, df_players=None):
         if 'net_rating' in recent_games.columns:
             recent_std = recent_games['net_rating'].std()
             recent_mean = abs(recent_games['net_rating'].mean())
+
             if recent_mean > 0:
                 cv = recent_std / recent_mean
+
                 if cv > 1.5:
                     window = max(MIN_WINDOW, window - 3)
                 elif cv < 0.5:
@@ -523,21 +544,22 @@ def advanced_adaptive_otw(team_data, current_date, team_name, df_players=None):
 
     games_last_week = team_data[
         team_data['date'] >= (current_date - timedelta(days=7))
-        ].shape[0]
+    ].shape[0]
 
     if games_last_week >= 4:
         window = max(MIN_WINDOW, window - 2)
     elif games_last_week <= 1:
         window = min(MAX_WINDOW, window + 2)
 
-    if len(team_data) >= window + 5:
+    if len(team_data) >= window + 5 and 'net_rating' in team_data.columns:
         recent = team_data.tail(window)
         historical = team_data.tail(window * 2).head(window)
-        if 'net_rating' in team_data.columns:
-            recent_perf = recent['net_rating'].mean()
-            hist_perf = historical['net_rating'].mean()
-            if abs(recent_perf - hist_perf) > 10:
-                window = max(MIN_WINDOW, window - 2)
+
+        recent_perf = recent['net_rating'].mean()
+        hist_perf = historical['net_rating'].mean()
+
+        if abs(recent_perf - hist_perf) > 10:
+            window = max(MIN_WINDOW, window - 2)
 
     return int(window)
 
@@ -580,16 +602,20 @@ def detect_roster_change(df_players, team_name, current_date, lookback_days=14):
 
 def calculate_dynamic_weights(dates, ref_date, volatility=None, game_importance=None):
     days_ago = (ref_date - dates).dt.days.clip(lower=0)
+
     if volatility is not None:
         lambda_param = 0.05 * (1 + volatility / 10)
     else:
         lambda_param = 0.05
 
     weights = np.exp(-lambda_param * days_ago)
+
     if game_importance is not None:
         weights *= (1 + 0.2 * np.array(game_importance))
+
     if weights.sum() > 0:
         weights = weights / weights.sum()
+
     return weights
 
 def calculate_confidence_interval(predictions, features, model_type='catboost'):
@@ -611,9 +637,11 @@ def calculate_confidence_interval(predictions, features, model_type='catboost'):
 
     base_margin = 0.05
     total_margin = base_margin + sum(uncertainty_factors)
+
     lower_bound = max(0, base_pred - total_margin)
     upper_bound = min(1, base_pred + total_margin)
     confidence_score = 1 - total_margin
+
     return lower_bound, upper_bound, confidence_score
 
 def safe_temporal_filter(df, current_date, buffer_days=1):
@@ -650,7 +678,8 @@ def calculate_player_features(df_players, df_games, current_date, team,
     if len(team_players_history) == 0:
         return {}
 
-    numeric_cols = ['min', 'points', 'totReb', 'assists', 'steals', 'blocks', 'turnovers', 'plusMinus', 'fgp', 'tpp', 'ftp']
+    numeric_cols = ['min', 'points', 'totReb', 'assists', 'steals', 'blocks', 'turnovers', 'plusMinus', 'fgp', 'tpp',
+                    'ftp']
     for col in numeric_cols:
         if col in team_players_history.columns:
             team_players_history[col] = pd.to_numeric(team_players_history[col], errors='coerce')
@@ -668,6 +697,7 @@ def calculate_player_features(df_players, df_games, current_date, team,
         return {}
 
     weights = calculate_dynamic_weights(recent_players['date'], current_date)
+
     player_stats = []
     for player_id in recent_players['player_id'].unique():
         player_data = recent_players[recent_players['player_id'] == player_id]
@@ -675,6 +705,7 @@ def calculate_player_features(df_players, df_games, current_date, team,
             continue
 
         player_weights = calculate_dynamic_weights(player_data['date'], current_date)
+
         try:
             player_stat = {
                 'min_avg': wavg(player_data['min'].astype(float), player_weights),
@@ -682,7 +713,7 @@ def calculate_player_features(df_players, df_games, current_date, team,
                 'rebounds_avg': wavg(player_data['totReb'].astype(float), player_weights),
                 'assists_avg': wavg(player_data['assists'].astype(float), player_weights),
                 'steals_avg': wavg(player_data['steals'].astype(float), player_weights),
-                'blocks_avg': wavg(player_data['bvvou ks'].astype(float), player_weights),
+                'blocks_avg': wavg(player_data['blocks'].astype(float), player_weights),
                 'turnovers_avg': wavg(player_data['turnovers'].astype(float), player_weights),
                 'plus_minus_avg': wavg(player_data['plusMinus'].astype(float), player_weights),
                 'fgp_avg': wavg(player_data['fgp'].astype(float), player_weights),
@@ -691,18 +722,21 @@ def calculate_player_features(df_players, df_games, current_date, team,
                 'games_played': len(player_data)
             }
             player_stats.append(player_stat)
-        except:
+        except Exception as e:
+            print(f"Erro ao processar jogador {player_id}: {e}")
             continue
 
     if len(player_stats) == 0:
         return {}
 
     player_df = pd.DataFrame(player_stats)
+
     player_weights = np.array([p['min_avg'] * p['games_played'] for p in player_stats])
     if player_weights.sum() == 0:
         player_weights = np.ones(len(player_stats))
 
     features = {}
+
     for col in player_df.columns:
         if col != 'games_played':
             features[f'player_{col}'] = wavg(player_df[col], player_weights)
@@ -720,23 +754,28 @@ def calculate_player_features(df_players, df_games, current_date, team,
         features['player_consistency'] = 0.5
 
     features['player_depth'] = len([p for p in player_stats if p['points_avg'] > 8.0])
+
     features['player_offensive_rating'] = (
-            features['player_points_avg'] * features['player_fgp_avg'] / 100.0 +
-            features['player_assists_avg'] * 0.5
+        features['player_points_avg'] * features['player_fgp_avg'] / 100.0 +
+        features['player_assists_avg'] * 0.5
     )
+
     features['player_defensive_rating'] = (
-            features['player_steals_avg'] * 2.0 +
-            features['player_blocks_avg'] * 2.0 -
-            features['player_turnovers_avg'] * 0.5
+        features['player_steals_avg'] * 2.0 +
+        features['player_blocks_avg'] * 2.0 -
+        features['player_turnovers_avg'] * 0.5
     )
+
     return features
 
-def calculate_advanced_features_with_players(df_games, df_players, window=10, use_adaptive_otw=True,
-                                             include_player_features=True):
+def calculate_advanced_features_with_players(df_games, df_players, window=10,
+                                           use_adaptive_otw=True, include_player_features=True,
+                                           otw_method='heuristic'):
     features_list = []
-    print(
-        f"\n🔄 Calculando features avançadas (window={window}, adaptive={use_adaptive_otw}, players={include_player_features})...")
+
+    print(f"\n🔄 Calculando features avançadas (window={window}, adaptive={use_adaptive_otw}, players={include_player_features}, otw_method={otw_method})...")
     total_games = len(df_games)
+
     df_games_sorted = df_games.sort_values('date').reset_index(drop=True)
 
     for idx, game in df_games_sorted.iterrows():
@@ -746,11 +785,14 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
         game_date = game['date']
         home_team = game['home_team']
         visitor_team = game['visitor_team']
+
         past_games = safe_temporal_filter(df_games_sorted, game_date, buffer_days=1)
+
         home_prev_games = past_games[
             ((past_games['home_team'] == home_team) |
              (past_games['visitor_team'] == home_team))
         ].sort_values('date')
+
         visitor_prev_games = past_games[
             ((past_games['home_team'] == visitor_team) |
              (past_games['visitor_team'] == visitor_team))
@@ -782,27 +824,39 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
         visitor_prev_games['net_rating'] = visitor_net_ratings
 
         if use_adaptive_otw:
-            home_window = advanced_adaptive_otw(home_prev_games, game_date, home_team, df_players)
-            visitor_window = advanced_adaptive_otw(visitor_prev_games, game_date, visitor_team, df_players)
+            if otw_method.startswith('horvat'):
+                horvat_method = otw_method.split('_')[1] if '_' in otw_method else 'correlation'
+                home_window = horvat_otw_optimization(
+                    home_prev_games, home_team, game_date, method=horvat_method
+                )
+                visitor_window = horvat_otw_optimization(
+                    visitor_prev_games, visitor_team, game_date, method=horvat_method
+                )
+            else:
+                home_window = advanced_adaptive_otw(home_prev_games, game_date, home_team, df_players)
+                visitor_window = advanced_adaptive_otw(visitor_prev_games, game_date, visitor_team, df_players)
+
             actual_window = min(home_window, visitor_window)
         else:
             actual_window = window
 
         home_recent = home_prev_games.tail(actual_window).copy()
         visitor_recent = visitor_prev_games.tail(actual_window).copy()
+
         home_vol = home_recent['net_rating'].std() if 'net_rating' in home_recent and not home_recent.empty else None
-        visitor_vol = visitor_recent[
-            'net_rating'].std() if 'net_rating' in visitor_recent and not visitor_recent.empty else None
+        visitor_vol = visitor_recent['net_rating'].std() if 'net_rating' in visitor_recent and not visitor_recent.empty else None
 
         w_home = calculate_dynamic_weights(home_recent['date'], game_date, volatility=home_vol)
-        w_vis = calculate_dynamic_weights(visitor_recent['date'], game_date, volatility=visitor_vol)
+        w_vis  = calculate_dynamic_weights(visitor_recent['date'], game_date, volatility=visitor_vol)
+
         features = {
             'game_id': game.get('game_id', f'idx_{idx}'),
             'date': game_date,
             'home_team': home_team,
             'visitor_team': visitor_team,
             'home_win': game['home_win'],
-            'actual_window': actual_window
+            'actual_window': actual_window,
+            'otw_method': otw_method
         }
 
         def acc_points(team_recent, team_name):
@@ -823,17 +877,18 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
 
         hw, hps, hpa = acc_points(home_recent, home_team)
         vw, vps, vpa = acc_points(visitor_recent, visitor_team)
+
         features['home_win_rate'] = hw / len(home_recent) if len(home_recent) > 0 else 0.5
         features['visitor_win_rate'] = vw / len(visitor_recent) if len(visitor_recent) > 0 else 0.5
-        hps_vals = np.array(hps, dtype=float)
-        hpa_vals = np.array(hpa, dtype=float)
-        vps_vals = np.array(vps, dtype=float)
-        vpa_vals = np.array(vpa, dtype=float)
-        features['home_avg_points'] = wavg(hps_vals, w_home) if len(hps_vals) else 0.0
-        features['visitor_avg_points'] = wavg(vps_vals, w_vis) if len(vps_vals) else 0.0
-        features['home_avg_points_allowed'] = wavg(hpa_vals, w_home) if len(hpa_vals) else 0.0
-        features['visitor_avg_points_allowed'] = wavg(vpa_vals, w_vis) if len(vpa_vals) else 0.0
-        features['home_net_rating'] = features['home_avg_points'] - features['home_avg_points_allowed']
+        hps_vals = np.array(hps, dtype=float); hpa_vals = np.array(hpa, dtype=float)
+        vps_vals = np.array(vps, dtype=float); vpa_vals = np.array(vpa, dtype=float)
+
+        features['home_avg_points']            = wavg(hps_vals, w_home) if len(hps_vals) else 0.0
+        features['visitor_avg_points']         = wavg(vps_vals, w_vis)  if len(vps_vals) else 0.0
+        features['home_avg_points_allowed']    = wavg(hpa_vals, w_home) if len(hpa_vals) else 0.0
+        features['visitor_avg_points_allowed'] = wavg(vpa_vals, w_vis)  if len(vpa_vals) else 0.0
+
+        features['home_net_rating']    = features['home_avg_points']    - features['home_avg_points_allowed']
         features['visitor_net_rating'] = features['visitor_avg_points'] - features['visitor_avg_points_allowed']
 
         if len(home_prev_games) > 0:
@@ -855,7 +910,7 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
             features['visitor_back_to_back'] = 0
 
         week_ago = game_date - timedelta(days=7)
-        features['home_games_last_week'] = int((home_prev_games['date'] >= week_ago).sum())
+        features['home_games_last_week']    = int((home_prev_games['date']    >= week_ago).sum())
         features['visitor_games_last_week'] = int((visitor_prev_games['date'] >= week_ago).sum())
 
         def calculate_streak(team_games, team_name, max_games=10):
@@ -875,14 +930,17 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
                     break
             return streak
 
-        features['home_streak'] = calculate_streak(home_prev_games, home_team)
+        features['home_streak']    = calculate_streak(home_prev_games, home_team)
         features['visitor_streak'] = calculate_streak(visitor_prev_games, visitor_team)
-        h2h_cutoff = game_date - timedelta(days=7)
+
+        h2h_cutoff = game_date - timedelta(days=180)
         h2h_games = past_games[
             (past_games['date'] < h2h_cutoff) &
-            (((past_games['home_team'] == home_team) & (past_games['visitor_team'] == visitor_team)) |
-             ((past_games['home_team'] == visitor_team) & (past_games['visitor_team'] == home_team)))
-            ].tail(5)
+            (
+                ((past_games['home_team'] == home_team)    & (past_games['visitor_team'] == visitor_team)) |
+                ((past_games['home_team'] == visitor_team) & (past_games['visitor_team'] == home_team))
+            )
+        ].tail(5)
 
         if len(h2h_games) > 0:
             h2h_home_wins = 0
@@ -897,22 +955,22 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
 
         home_at_home = past_games[past_games['home_team'] == home_team].tail(15)
         if len(home_at_home) > 0:
-            features['home_team_home_win_rate'] = (home_at_home['home_score'] > home_at_home['visitor_score']).mean()
-            features['home_team_home_avg_score'] = home_at_home['home_score'].mean()
-            features['home_team_home_avg_allowed'] = home_at_home['visitor_score'].mean()
+            features['home_team_home_win_rate']     = (home_at_home['home_score'] > home_at_home['visitor_score']).mean()
+            features['home_team_home_avg_score']    = home_at_home['home_score'].mean()
+            features['home_team_home_avg_allowed']  = home_at_home['visitor_score'].mean()
         else:
-            features['home_team_home_win_rate'] = 0.5
-            features['home_team_home_avg_score'] = 110.0
+            features['home_team_home_win_rate']    = 0.5
+            features['home_team_home_avg_score']   = 110.0
             features['home_team_home_avg_allowed'] = 110.0
 
         visitor_away = past_games[past_games['visitor_team'] == visitor_team].tail(15)
         if len(visitor_away) > 0:
-            features['visitor_team_away_win_rate'] = (visitor_away['visitor_score'] > visitor_away['home_score']).mean()
-            features['visitor_team_away_avg_score'] = visitor_away['visitor_score'].mean()
-            features['visitor_team_away_avg_allowed'] = visitor_away['home_score'].mean()
+            features['visitor_team_away_win_rate']     = (visitor_away['visitor_score'] > visitor_away['home_score']).mean()
+            features['visitor_team_away_avg_score']    = visitor_away['visitor_score'].mean()
+            features['visitor_team_away_avg_allowed']  = visitor_away['home_score'].mean()
         else:
-            features['visitor_team_away_win_rate'] = 0.5
-            features['visitor_team_away_avg_score'] = 110.0
+            features['visitor_team_away_win_rate']    = 0.5
+            features['visitor_team_away_avg_score']   = 110.0
             features['visitor_team_away_avg_allowed'] = 110.0
 
         def calculate_momentum(team_games, team_name, games=3):
@@ -927,23 +985,26 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
                     momentum += 1 if g['visitor_score'] > g['home_score'] else -1
             return momentum / len(last_games)
 
-        features['home_momentum'] = calculate_momentum(home_prev_games, home_team)
+        features['home_momentum']    = calculate_momentum(home_prev_games, home_team)
         features['visitor_momentum'] = calculate_momentum(visitor_prev_games, visitor_team)
-        features['month'] = int(game_date.month)
+
+        features['month']       = int(game_date.month)
         features['day_of_week'] = int(game_date.dayofweek)
-        features['is_weekend'] = 1 if game_date.dayofweek >= 5 else 0
+        features['is_weekend']  = 1 if game_date.dayofweek >= 5 else 0
+
         season_start = pd.to_datetime(f'{game_date.year}-10-01', utc=True)
         if game_date.month < 6:
             season_start = pd.to_datetime(f'{game_date.year - 1}-10-01', utc=True)
         days_into_season = int((game_date - season_start).days)
         features['days_into_season'] = days_into_season
-        features['season_phase'] = int(min(3, days_into_season // 60))
-        features['win_rate_diff'] = features['home_win_rate'] - features['visitor_win_rate']
-        features['net_rating_diff'] = features['home_net_rating'] - features['visitor_net_rating']
-        features['points_diff'] = features['home_avg_points'] - features['visitor_avg_points']
-        features['rest_advantage'] = features['home_rest_days'] - features['visitor_rest_days']
-        features['momentum_diff'] = features['home_momentum'] - features['visitor_momentum']
-        features['streak_diff'] = features['home_streak'] - features['visitor_streak']
+        features['season_phase']     = int(min(3, days_into_season // 60))
+
+        features['win_rate_diff']    = features['home_win_rate']    - features['visitor_win_rate']
+        features['net_rating_diff']  = features['home_net_rating']  - features['visitor_net_rating']
+        features['points_diff']      = features['home_avg_points']  - features['visitor_avg_points']
+        features['rest_advantage']   = features['home_rest_days']   - features['visitor_rest_days']
+        features['momentum_diff']    = features['home_momentum']    - features['visitor_momentum']
+        features['streak_diff']      = features['home_streak']      - features['visitor_streak']
 
         if len(home_recent) >= 3:
             home_pts_series = np.array([
@@ -963,30 +1024,32 @@ def calculate_advanced_features_with_players(df_games, df_players, window=10, us
         else:
             features['visitor_score_volatility'] = 10.0
 
-        features['home_off_vs_visitor_def'] = features['home_avg_points'] - features['visitor_avg_points_allowed']
+        features['home_off_vs_visitor_def'] = features['home_avg_points']    - features['visitor_avg_points_allowed']
         features['visitor_off_vs_home_def'] = features['visitor_avg_points'] - features['home_avg_points_allowed']
 
         if include_player_features:
             try:
-                home_player_features = calculate_player_features(df_players, df_games, game_date, home_team)
+                home_player_features    = calculate_player_features(df_players, df_games, game_date, home_team)
                 visitor_player_features = calculate_player_features(df_players, df_games, game_date, visitor_team)
+
                 for key, value in home_player_features.items():
                     features[f'home_{key}'] = value
                 for key, value in visitor_player_features.items():
                     features[f'visitor_{key}'] = value
+
                 for key in home_player_features.keys():
                     home_key = f'home_{key}'
                     visitor_key = f'visitor_{key}'
                     if home_key in features and visitor_key in features:
                         features[f'player_{key}_diff'] = features[home_key] - features[visitor_key]
-            except:
-                pass
+
+            except Exception as e:
+                print(f"Erro ao calcular features de jogadores: {e}")
 
         features_list.append(features)
 
     df_feat = pd.DataFrame(features_list)
     return df_feat.replace([np.inf, -np.inf], np.nan).dropna()
-
 
 class TemporalValidator:
     def __init__(self, n_splits=3, embargo_days=1, min_train=50, min_test=10):
@@ -999,7 +1062,6 @@ class TemporalValidator:
         if 'date' not in df.columns or len(df) == 0:
             return []
 
-        # Criar uma cópia com índice resetado para trabalhar
         df_sorted = df.sort_values('date').reset_index(drop=True)
         date_norm = df_sorted['date'].dt.normalize()
         unique_days = date_norm.unique()
@@ -1022,7 +1084,6 @@ class TemporalValidator:
 
             embargo_cut = test_start_day - pd.Timedelta(days=self.embargo_days)
 
-            # Usar o índice do DataFrame resetado
             train_idx = df_sorted[df_sorted['date'] < embargo_cut].index
             test_idx = df_sorted[
                 (df_sorted['date'] >= test_start_day) &
@@ -1035,7 +1096,6 @@ class TemporalValidator:
         return splits
 
 def calcular_acuracia_por_time(test_df, y_test, y_pred):
-    """Calcula acurácia por time"""
     resultados_time = []
     test_df_com_pred = test_df.copy()
     test_df_com_pred['prediction'] = y_pred
@@ -1075,7 +1135,6 @@ def calcular_acuracia_por_time(test_df, y_test, y_pred):
     return pd.DataFrame(resultados_time)
 
 def avaliar_predictions(y_true, proba, thresh=0.5, titulo="Sem calibração"):
-    """Avalia predictions com threshold específico"""
     preds = (proba >= thresh).astype(int)
     cm = confusion_matrix(y_true, preds)
     print(f"\n🔎 Avaliação {titulo} (threshold={thresh:.2f})")
@@ -1083,13 +1142,148 @@ def avaliar_predictions(y_true, proba, thresh=0.5, titulo="Sem calibração"):
     print("\nClassification report:")
     print(classification_report(y_true, preds, digits=4))
 
-# =============================================================================
-# CARREGAMENTO E PRÉ-PROCESSAMENTO DE DADOS
-# =============================================================================
+def execute_otw_comparison(df_games, df_players):
+    """
+    Executa comparação entre diferentes estratégias de OTW
+    """
+    print("\n" + "="*80)
+    print("🎯 EXPERIMENTO COMPARATIVO: ESTRATÉGIAS OTW")
+    print("="*80)
 
-# Carregar dados
-games_file = 'nba_all_games_2021_present_2025-09-26_17-45-08.xlsx'
-players_file = 'nba_all_player_stats_2021_present_2025-09-26_17-45-08.xlsx'
+    # Definir métodos OTW para comparação
+    otw_configs = [
+        {'window': 10, 'adaptive': False, 'players': True, 'otw_method': 'fixed', 'name': 'Janela Fixa (10)'},
+        {'window': 5, 'adaptive': False, 'players': True, 'otw_method': 'fixed', 'name': 'Janela Fixa (5)'},
+        {'window': 15, 'adaptive': False, 'players': True, 'otw_method': 'fixed', 'name': 'Janela Fixa (15)'},
+        {'window': 10, 'adaptive': True, 'players': True, 'otw_method': 'heuristic', 'name': 'Heurística Adaptativa'},
+        {'window': 10, 'adaptive': True, 'players': True, 'otw_method': 'horvat_correlation', 'name': 'Horvat (Correlação)'},
+    ]
+
+    results_otw = {}
+
+    for config in otw_configs:
+        print(f"\n🧪 Testando: {config['name']}")
+
+        try:
+            df_features = calculate_advanced_features_with_players(
+                df_games, df_players,
+                window=config['window'],
+                use_adaptive_otw=config['adaptive'],
+                include_player_features=config['players'],
+                otw_method=config['otw_method']
+            )
+
+            if len(df_features) < 100:
+                print(f"  ❌ Poucos dados ({len(df_features)}), pulando...")
+                continue
+
+            # Features disponíveis
+            numerical_features = [
+                'home_win_rate', 'visitor_win_rate', 'home_avg_points', 'visitor_avg_points',
+                'home_avg_points_allowed', 'visitor_avg_points_allowed', 'home_net_rating', 'visitor_net_rating',
+                'home_rest_days', 'visitor_rest_days', 'home_back_to_back', 'visitor_back_to_back',
+                'home_games_last_week', 'visitor_games_last_week', 'home_streak', 'visitor_streak',
+                'h2h_home_win_rate', 'home_team_home_win_rate', 'visitor_team_away_win_rate',
+                'home_team_home_avg_score', 'home_team_home_avg_allowed', 'visitor_team_away_avg_score',
+                'visitor_team_away_avg_allowed', 'home_momentum', 'visitor_momentum', 'days_into_season',
+                'win_rate_diff', 'net_rating_diff', 'points_diff', 'rest_advantage', 'momentum_diff',
+                'streak_diff', 'home_score_volatility', 'visitor_score_volatility',
+                'home_off_vs_visitor_def', 'visitor_off_vs_home_def'
+            ]
+
+            player_features = [col for col in df_features.columns if col.startswith('home_player_') or
+                              col.startswith('visitor_player_') or col.startswith('player_')]
+            numerical_features.extend(player_features)
+
+            categorical_features = ['home_team', 'visitor_team', 'month', 'day_of_week', 'is_weekend', 'season_phase']
+            all_features = numerical_features + categorical_features
+            target = 'home_win'
+            available_features = [f for f in all_features if f in df_features.columns]
+
+            # Validação temporal
+            validator = TemporalValidator(n_splits=3, embargo_days=1)
+            splits = validator.split(df_features)
+
+            if len(splits) == 0:
+                print("  ❌ Nenhum split válido")
+                continue
+
+            fold_aucs = []
+            for train_idx, val_idx in splits:
+                train_df = df_features.iloc[train_idx]
+                val_df = df_features.iloc[val_idx]
+                X_train = train_df[available_features]
+                y_train = train_df[target]
+                X_val = val_df[available_features]
+                y_val = val_df[target]
+
+                model = CatBoostClassifier(
+                    iterations=200,
+                    depth=4,
+                    learning_rate=0.05,
+                    l2_leaf_reg=10,
+                    cat_features=[f for f in categorical_features if f in available_features],
+                    random_seed=42,
+                    verbose=False,
+                    loss_function='Logloss',
+                    eval_metric='AUC',
+                    early_stopping_rounds=20,
+                    subsample=0.8
+                )
+                model.fit(X_train, y_train, eval_set=(X_val, y_val), verbose=0)
+                y_pred_proba = model.predict_proba(X_val)[:, 1]
+                auc_score = roc_auc_score(y_val, y_pred_proba)
+                fold_aucs.append(auc_score)
+
+            mean_auc = float(np.mean(fold_aucs))
+            std_auc = float(np.std(fold_aucs))
+
+            # Estatísticas da janela
+            window_stats = {}
+            if 'actual_window' in df_features.columns:
+                window_stats = {
+                    'mean_window': df_features['actual_window'].mean(),
+                    'std_window': df_features['actual_window'].std(),
+                    'min_window': df_features['actual_window'].min(),
+                    'max_window': df_features['actual_window'].max()
+                }
+
+            results_otw[config['name']] = {
+                'mean_auc': mean_auc,
+                'std_auc': std_auc,
+                'n_games': len(df_features),
+                'window_stats': window_stats,
+                'config': config
+            }
+
+            print(f"  ✅ AUC: {mean_auc:.4f} ± {std_auc:.4f}")
+            if window_stats:
+                print(f"  📊 Janela: {window_stats['mean_window']:.1f} ± {window_stats['std_window']:.1f}")
+
+        except Exception as e:
+            print(f"  ❌ Erro: {e}")
+            continue
+
+    return results_otw
+
+def select_best_otw_method(otw_results):
+    """
+    Seleciona o melhor método OTW baseado nos resultados
+    """
+    if not otw_results:
+        return {'window': 10, 'adaptive': True, 'players': True, 'otw_method': 'heuristic'}
+
+    best_method = max(otw_results.items(), key=lambda x: x[1]['mean_auc'])
+    best_config = best_method[1]['config']
+
+    print(f"\n🏆 MELHOR MÉTODO SELECIONADO: {best_method[0]}")
+    print(f"   AUC: {best_method[1]['mean_auc']:.4f}")
+    print(f"   Configuração: {best_config}")
+
+    return best_config
+
+games_file = '/content/drive/MyDrive/TCC/nba_all_games_2021_present_2025-09-26_17-45-08.xlsx'
+players_file = '/content/drive/MyDrive/TCC/nba_all_player_stats_2021_present_2025-09-26_17-45-08.xlsx'
 
 print("\n📊 Carregando dados...")
 df_games = pd.read_excel(games_file)
@@ -1126,158 +1320,93 @@ df_games = df_games.rename(columns={
 df_games['home_win'] = (df_games['home_score'] > df_games['visitor_score']).astype(int)
 print(f"✅ Target criado. Distribuição: {df_games['home_win'].value_counts(normalize=True).to_dict()}")
 
-# =============================================================================
-# OTIMIZAÇÃO DE HIPERPARÂMETROS
-# =============================================================================
+print("\n🎯 FASE 1: EXPERIMENTO COMPARATIVO DE ESTRATÉGIAS OTW")
+otw_results = execute_otw_comparison(df_games, df_players)
 
-print("\n🔍 Otimizando Hiperparâmetros com Validação Temporal...")
+# Análise dos resultados OTW
+if otw_results:
+    print("\n" + "="*80)
+    print("📊 RESULTADOS COMPARATIVOS OTW")
+    print("="*80)
 
-configs = [
-    {'window': 8, 'adaptive': False, 'players': True},
-    {'window': 10, 'adaptive': False, 'players': True},
-    {'window': 12, 'adaptive': False, 'players': True},
-    {'window': 15, 'adaptive': False, 'players': True},
-    {'window': 10, 'adaptive': True, 'players': True},
-    {'window': 12, 'adaptive': True, 'players': True}
-]
+    comparison_data = []
+    for method_name, metrics in otw_results.items():
+        comparison_data.append({
+            'Método': method_name,
+            'AUC_Médio': f"{metrics['mean_auc']:.4f}",
+            'Desvio_AUC': f"{metrics['std_auc']:.4f}",
+            'N_Jogos': metrics['n_games'],
+            'Janela_Média': f"{metrics['window_stats'].get('mean_window', 'N/A')}",
+            'Std_Janela': f"{metrics['window_stats'].get('std_window', 'N/A')}"
+        })
 
-best_config = None
-best_auc = 0.0
-config_results = {}
+    df_otw_comparison = pd.DataFrame(comparison_data)
+    df_otw_comparison = df_otw_comparison.sort_values('AUC_Médio', ascending=False)
+    print(df_otw_comparison.to_string(index=False))
 
-for config in configs:
-    print(f"\nTestando configuração: {config}")
-    df_features = calculate_advanced_features_with_players(
-        df_games, df_players,
-        window=config['window'],
-        use_adaptive_otw=config['adaptive'],
-        include_player_features=config['players']
-    )
+    # Visualização
+    plt.figure(figsize=(12, 8))
+    methods = df_otw_comparison['Método'].values
+    aucs = [float(x) for x in df_otw_comparison['AUC_Médio'].values]
+    errors = [float(x) for x in df_otw_comparison['Desvio_AUC'].values]
 
-    if len(df_features) < 100:
-        print("  ❌ Poucos dados, pulando...")
-        continue
+    colors = ['skyblue', 'lightgreen', 'lightcoral', 'gold', 'lightpink']
+    plt.bar(methods, aucs, yerr=errors, capsize=5, color=colors[:len(methods)])
+    plt.title('Comparação de Métodos OTW - AUC Médio', fontsize=14, fontweight='bold')
+    plt.ylabel('AUC Médio', fontsize=12)
+    plt.xlabel('Método OTW', fontsize=12)
+    plt.xticks(rotation=45)
+    plt.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.show()
 
-    numerical_features = [
-        'home_win_rate', 'visitor_win_rate',
-        'home_avg_points', 'visitor_avg_points',
-        'home_avg_points_allowed', 'visitor_avg_points_allowed',
-        'home_net_rating', 'visitor_net_rating',
-        'home_rest_days', 'visitor_rest_days',
-        'home_back_to_back', 'visitor_back_to_back',
-        'home_games_last_week', 'visitor_games_last_week',
-        'home_streak', 'visitor_streak', 'h2h_home_win_rate',
-        'home_team_home_win_rate', 'visitor_team_away_win_rate',
-        'home_team_home_avg_score', 'home_team_home_avg_allowed',
-        'visitor_team_away_avg_score', 'visitor_team_away_avg_allowed',
-        'home_momentum', 'visitor_momentum', 'days_into_season',
-        'win_rate_diff', 'net_rating_diff', 'points_diff', 'rest_advantage',
-        'momentum_diff', 'streak_diff', 'home_score_volatility', 'visitor_score_volatility',
-        'home_off_vs_visitor_def', 'visitor_off_vs_home_def'
-    ]
+print("\n🎯 FASE 2: TREINAMENTO FINAL COM MELHOR CONFIGURAÇÃO")
 
-    if config['players']:
-        player_features = [col for col in df_features.columns if col.startswith('home_player_') or
-                           col.startswith('visitor_player_') or col.startswith('player_')]
-        numerical_features.extend(player_features)
+# Selecionar melhor método ou usar fallback
+if otw_results:
+    best_config = select_best_otw_method(otw_results)
+else:
+    best_config = {'window': 10, 'adaptive': True, 'players': True, 'otw_method': 'heuristic'}
+    print("⚠️ Usando configuração fallback")
 
-    categorical_features = ['home_team', 'visitor_team', 'month', 'day_of_week', 'is_weekend', 'season_phase']
-    all_features = numerical_features + categorical_features
-    target = 'home_win'
-    available_features = [f for f in all_features if f in df_features.columns]
-    missing_features = set(all_features) - set(available_features)
-    if missing_features:
-        print(f"  ⚠️ Features faltantes: {missing_features}")
-
-    validator = TemporalValidator(n_splits=3, embargo_days=1)
-    splits = validator.split(df_features)
-
-    if len(splits) == 0:
-        print("  ❌ Nenhum split válido")
-        continue
-
-    fold_aucs = []
-    for train_idx, val_idx in splits:
-        train_df = df_features.iloc[train_idx]
-        val_df = df_features.iloc[val_idx]
-        X_train = train_df[available_features]
-        y_train = train_df[target]
-        X_val = val_df[available_features]
-        y_val = val_df[target]
-        model = CatBoostClassifier(
-            iterations=200,
-            depth=4,
-            learning_rate=0.05,
-            l2_leaf_reg=10,
-            cat_features=[f for f in categorical_features if f in available_features],
-            random_seed=42,
-            verbose=False,
-            loss_function='Logloss',
-            eval_metric='AUC',
-            early_stopping_rounds=20,
-            subsample=0.8
-        )
-        model.fit(X_train, y_train, eval_set=(X_val, y_val), verbose=0)
-        y_pred_proba = model.predict_proba(X_val)[:, 1]
-        auc_score = roc_auc_score(y_val, y_pred_proba)
-        fold_aucs.append(auc_score)
-
-    mean_auc = float(np.mean(fold_aucs))
-    config_results[str(config)] = {'auc': mean_auc, 'std': float(np.std(fold_aucs))}
-    print(f"  AUC médio: {mean_auc:.4f} ± {np.std(fold_aucs):.4f}")
-
-    if mean_auc > best_auc:
-        best_auc = mean_auc
-        best_config = config
-
-if best_config is None:
-    print("⚠️ Nenhuma configuração válida. Usando fallback {'window': 10, 'adaptive': True, 'players': True}.")
-    best_config = {'window': 10, 'adaptive': True, 'players': True}
-
-print(f"\n✅ Melhor configuração: {best_config} (AUC: {best_auc:.4f})")
-
-# =============================================================================
-# TREINAMENTO DO MODELO FINAL
-# =============================================================================
-
-print("\n🤖 Treinamento final com configuração otimizada...")
+print(f"\n🤖 Treinando modelo final com: {best_config}")
 
 df_features_final = calculate_advanced_features_with_players(
     df_games, df_players,
     window=best_config['window'],
     use_adaptive_otw=best_config['adaptive'],
-    include_player_features=True
+    include_player_features=best_config['players'],
+    otw_method=best_config['otw_method']
 )
 
 print(f"\n🔍 Dataset final: {len(df_features_final)} jogos")
 print(f"Período: {df_features_final['date'].min().date()} até {df_features_final['date'].max().date()})")
 print(f"Distribuição target: {df_features_final['home_win'].value_counts(normalize=True).to_dict()}")
 
+# Preparar features para treinamento
 numerical_features = [
-    'home_win_rate', 'visitor_win_rate',
-    'home_avg_points', 'visitor_avg_points',
-    'home_avg_points_allowed', 'visitor_avg_points_allowed',
-    'home_net_rating', 'visitor_net_rating',
-    'home_rest_days', 'visitor_rest_days',
-    'home_back_to_back', 'visitor_back_to_back',
-    'home_games_last_week', 'visitor_games_last_week',
-    'home_streak', 'visitor_streak', 'h2h_home_win_rate',
-    'home_team_home_win_rate', 'visitor_team_away_win_rate',
-    'home_team_home_avg_score', 'home_team_home_avg_allowed',
-    'visitor_team_away_avg_score', 'visitor_team_away_avg_allowed',
-    'home_momentum', 'visitor_momentum', 'days_into_season',
-    'win_rate_diff', 'net_rating_diff', 'points_diff', 'rest_advantage',
-    'momentum_diff', 'streak_diff', 'home_score_volatility', 'visitor_score_volatility',
+    'home_win_rate', 'visitor_win_rate', 'home_avg_points', 'visitor_avg_points',
+    'home_avg_points_allowed', 'visitor_avg_points_allowed', 'home_net_rating', 'visitor_net_rating',
+    'home_rest_days', 'visitor_rest_days', 'home_back_to_back', 'visitor_back_to_back',
+    'home_games_last_week', 'visitor_games_last_week', 'home_streak', 'visitor_streak',
+    'h2h_home_win_rate', 'home_team_home_win_rate', 'visitor_team_away_win_rate',
+    'home_team_home_avg_score', 'home_team_home_avg_allowed', 'visitor_team_away_avg_score',
+    'visitor_team_away_avg_allowed', 'home_momentum', 'visitor_momentum', 'days_into_season',
+    'win_rate_diff', 'net_rating_diff', 'points_diff', 'rest_advantage', 'momentum_diff',
+    'streak_diff', 'home_score_volatility', 'visitor_score_volatility',
     'home_off_vs_visitor_def', 'visitor_off_vs_home_def'
 ]
 
 player_features = [col for col in df_features_final.columns if col.startswith('home_player_') or
                    col.startswith('visitor_player_') or col.startswith('player_')]
 numerical_features.extend(player_features)
+
 categorical_features = ['home_team', 'visitor_team', 'month', 'day_of_week', 'is_weekend', 'season_phase']
 all_features = numerical_features + categorical_features
 target = 'home_win'
 available_features = [f for f in all_features if f in df_features_final.columns]
+
+# Split temporal
 split_date = df_features_final['date'].quantile(0.80)
 train_mask = df_features_final['date'] < split_date
 test_mask = ~train_mask
@@ -1299,9 +1428,11 @@ y_train = train_df[target]
 X_test = test_df[available_features]
 y_test = test_df[target]
 
+# Balanceamento de classes
 pos_rate = float(y_train.mean()) if len(y_train) > 0 else 0.5
 scale_pos_weight = float((1 - pos_rate) / pos_rate) if 0 < pos_rate < 1 else 1.0
 
+# Modelo final
 final_model = CatBoostClassifier(
     iterations=400,
     depth=5,
@@ -1328,10 +1459,7 @@ final_model.fit(
 y_pred = final_model.predict(X_test)
 y_pred_proba = final_model.predict_proba(X_test)[:, 1]
 
-# =============================================================================
-# ANÁLISE DE CONFIANÇA
-# =============================================================================
-
+# Intervalos de confiança
 cis = []
 for i in range(len(test_df)):
     pred = y_pred_proba[i]
@@ -1341,15 +1469,8 @@ for i in range(len(test_df)):
 
 avg_conf = np.mean([c[2] for c in cis])
 print(f"\nConfiança média das previsões: {avg_conf:.4f}")
-print("Exemplos de CI (primeiros 5 jogos):")
-for i in range(min(5, len(cis))):
-    lower, upper, conf = cis[i]
-    print(f"Jogo {i}: Prob {y_pred_proba[i]:.4f} | CI [{lower:.4f}, {upper:.4f}] | Conf {conf:.4f}")
 
-# =============================================================================
-# AVALIAÇÃO DO MODELO
-# =============================================================================
-
+# Métricas principais
 acc = accuracy_score(y_test, y_pred)
 auc_roc = roc_auc_score(y_test, y_pred_proba)
 ll = log_loss(y_test, y_pred_proba)
@@ -1395,33 +1516,32 @@ if home_preds_pct > 0.65 or home_preds_pct < 0.45:
     print(f"AUC-ROC calibrada: {auc_roc_cal:.4f}")
     print(f"Log Loss calibrado: {ll_cal:.4f}")
 
-    try:
-        prob_true_raw, prob_pred_raw = calibration_curve(y_test, y_pred_proba, n_bins=10, strategy='quantile')
-        prob_true_cal, prob_pred_cal = calibration_curve(y_test, y_pred_proba_cal, n_bins=10, strategy='quantile')
-        plt.figure(figsize=(6, 6))
-        plt.plot([0, 1], [0, 1], linestyle='--', label='Perfeita')
-        plt.plot(prob_pred_raw, prob_true_raw, marker='o', label='Sem calibração')
-        plt.plot(prob_pred_cal, prob_true_cal, marker='o', label='Calibrada')
-        plt.xlabel('Probabilidade prevista')
-        plt.ylabel('Fração positiva')
-        plt.title('Curva de Confiabilidade')
-        plt.legend()
-        plt.tight_layout()
-        plt.show()
-    except:
-        pass
-else:
-    print("Sem calibração adicional.")
+print("\n" + "=" * 80)
+print("ANÁLISES COMPLEMENTARES E COMPARAÇÃO DE MODELOS")
+print("=" * 80)
 
-# Avaliações detalhadas
-avaliar_predictions(y_test, y_pred_proba, 0.5, "Bruta")
-if calibrated_model is not None:
-    avaliar_predictions(y_test, y_pred_proba_cal, 0.5, "Calibrada")
+# 1. Comparação com modelos baseline
+print("\n1. 🔄 COMPARANDO COM MODELOS BASELINE...")
+categorical_features_clean = [f for f in categorical_features if f in available_features]
+baseline_results, comparison_df = compare_with_baseline_models(
+    X_train, y_train, X_test, y_test, categorical_features_clean, final_model
+)
 
-# =============================================================================
-# ANÁLISE DE FEATURES
-# =============================================================================
+# 2. Análise compreensiva do CatBoost
+print("\n2. 📊 ANÁLISE COMPREENSIVA DO CATBOOST...")
+catboost_metrics = plot_comprehensive_analysis(
+    y_test, y_pred_proba, y_pred, "CatBoost"
+)
 
+# 3. Análise de calibração
+print("\n3. 🎯 ANÁLISE DE CALIBRAÇÃO...")
+plot_calibration_analysis(y_test, y_pred_proba, y_pred_proba_cal, "CatBoost")
+
+# 4. Matriz de confusão
+print("\n4. 📋 MATRIZ DE CONFUSÃO...")
+plot_confusion_matrix_analysis(y_test, y_pred, y_pred_cal, "CatBoost")
+
+# 5. Feature Importance
 fi_df = None
 try:
     importances = final_model.get_feature_importance()
@@ -1435,10 +1555,10 @@ try:
     plt.title('Importância de Features CatBoost')
     plt.tight_layout()
     plt.show()
-except:
-    pass
+except Exception as e:
+    print(f"⚠️ Erro ao calcular feature importance: {e}")
 
-# SHAP analysis
+# 6. SHAP analysis
 try:
     n_sample = min(500, len(X_test))
     if n_sample >= 50:
@@ -1448,13 +1568,10 @@ try:
         print("\n📊 Plot SHAP summary das principais variáveis")
         shap.summary_plot(shap_values, X_shap, show=True, plot_type='bar', max_display=20)
         shap.summary_plot(shap_values, X_shap, show=True, max_display=20)
-except:
-    pass
+except Exception as e:
+    print(f"⚠️ Erro na análise SHAP: {e}")
 
-# =============================================================================
-# ANÁLISE POR TIME
-# =============================================================================
-
+# 7. Acurácia por time
 print("\n📊 Calculando acurácia por time...")
 df_acuracia_time = calcular_acuracia_por_time(test_df, y_test, y_pred)
 df_acuracia_time = df_acuracia_time.sort_values('acuracia_geral_time', ascending=False)
@@ -1464,75 +1581,8 @@ print(df_acuracia_time.head(10).to_string(index=False))
 print("\n📉 BOTTOM 10 Times por Acurácia:")
 print(df_acuracia_time.tail(10).to_string(index=False))
 
-# =============================================================================
-# ANÁLISES COMPLEMENTARES
-# =============================================================================
-
-print("\n" + "=" * 80)
-print("ANÁLISES COMPLEMENTARES E COMPARAÇÃO DE MODELOS")
-print("=" * 80)
-
-# 1. Comparação com modelos baseline
-print("\n1. 🔄 COMPARANDO COM MODELOS BASELINE...")
-categorical_features_clean = [f for f in categorical_features if f in available_features]
-baseline_results, comparison_df = compare_with_baseline_models(
-    X_train, y_train, X_test, y_test, categorical_features_clean
-)
-
-# Adicionar CatBoost aos resultados baseline
-y_pred_proba_catboost = final_model.predict_proba(X_test)[:, 1]
-y_pred_catboost = final_model.predict(X_test)
-
-baseline_results['CatBoost'] = {
-    'accuracy': accuracy_score(y_test, y_pred_catboost),
-    'auc_roc': roc_auc_score(y_test, y_pred_proba_catboost),
-    'log_loss': log_loss(y_test, y_pred_proba_catboost),
-    'f1': f1_score(y_test, y_pred_catboost),
-    'precision': precision_score(y_test, y_pred_catboost),
-    'recall': recall_score(y_test, y_pred_catboost)
-}
-
-# 2. Análise compreensiva do CatBoost
-print("\n2. 📊 ANÁLISE COMPREENSIVA DO CATBOOST...")
-catboost_metrics = plot_comprehensive_analysis(
-    y_test, y_pred_proba_catboost, y_pred_catboost, "CatBoost"
-)
-
-# 3. Análise de calibração
-print("\n3. 🎯 ANÁLISE DE CALIBRAÇÃO...")
-plot_calibration_analysis(y_test, y_pred_proba_catboost, None, "CatBoost")
-
-# 4. Matriz de confusão
-print("\n4. 📋 MATRIZ DE CONFUSÃO...")
-plot_confusion_matrix_analysis(y_test, y_pred_catboost, None, "CatBoost")
-
-# 5. Análise de ablação de features
-print("\n5. 🔍 ANÁLISE DE ABLAÇÃO DE FEATURES...")
-feature_groups = {
-    'Estatísticas Básicas': ['home_win_rate', 'visitor_win_rate', 'home_avg_points', 'visitor_avg_points'],
-    'Estatísticas Defensivas': ['home_avg_points_allowed', 'visitor_avg_points_allowed', 'home_net_rating',
-                                'visitor_net_rating'],
-    'Descanso e Agenda': ['home_rest_days', 'visitor_rest_days', 'home_back_to_back', 'visitor_back_to_back'],
-    'Momentum': ['home_streak', 'visitor_streak', 'home_momentum', 'visitor_momentum'],
-    'Head-to-Head': ['h2h_home_win_rate'],
-    'Home/Away Performance': ['home_team_home_win_rate', 'visitor_team_away_win_rate'],
-    'Features de Jogadores': [f for f in available_features if 'player_' in f],
-    'Diferenciais': ['win_rate_diff', 'net_rating_diff', 'points_diff', 'rest_advantage']
-}
-
-# Filtrar apenas features que existem
-filtered_groups = {}
-for group_name, features in feature_groups.items():
-    existing_features = [f for f in features if f in available_features]
-    if existing_features:
-        filtered_groups[group_name] = existing_features
-
-ablation_results = plot_feature_ablation_analysis(final_model, X_train, y_train, filtered_groups, "CatBoost")
-
-# 6. Validação Purged K-Fold
+# 8. Validação Purged K-Fold
 print("\n6. 🔄 VALIDAÇÃO PURGED K-FOLD...")
-
-# Criar uma cópia do DataFrame para trabalhar com índices consistentes
 df_features_final_sorted = df_features_final.sort_values('date').reset_index(drop=True)
 purged_folds = purged_kfold_validation(df_features_final_sorted, n_splits=5, embargo_days=3)
 
@@ -1541,13 +1591,11 @@ if purged_folds:
     for fold, (train_idx, val_idx) in enumerate(purged_folds):
         print(f"  Fold {fold + 1}/{len(purged_folds)}...")
 
-        # Usar .iloc para acessar pelas posições, já que resetamos o índice
         X_train_fold = df_features_final_sorted.iloc[train_idx][available_features]
         y_train_fold = df_features_final_sorted.iloc[train_idx][target]
         X_val_fold = df_features_final_sorted.iloc[val_idx][available_features]
         y_val_fold = df_features_final_sorted.iloc[val_idx][target]
 
-        # Pular fold se não houver dados suficientes
         if len(X_train_fold) < 50 or len(X_val_fold) < 10:
             print(f"    ⚠️ Fold {fold + 1} ignorado: dados insuficientes")
             continue
@@ -1573,23 +1621,41 @@ if purged_folds:
         print("❌ Nenhum fold válido para cálculo do AUC")
 else:
     print("❌ Não foi possível realizar Purged K-Fold (poucos dados ou splits inválidos)")
-# =============================================================================
-# SALVAMENTO DE RESULTADOS
-# =============================================================================
 
-acuracia_geral = accuracy_score(y_test, y_pred)
+def _excel_safe(df):
+    if df is None:
+        return None
+    df = df.copy()
+    for c in df.columns:
+        s = df[c]
+        if pd.api.types.is_datetime64tz_dtype(s):
+            df[c] = s.dt.tz_localize(None)
+        elif pd.api.types.is_datetime64_dtype(s):
+            df[c] = pd.to_datetime(s).dt.tz_localize(None)
+        elif s.dtype == "object":
+            def _to_naive(x):
+                if isinstance(x, pd.Timestamp):
+                    return x.tz_localize(None) if x.tz is not None else x
+                try:
+                    import datetime as _dt
+                    if isinstance(x, _dt.datetime) and x.tzinfo is not None:
+                        return x.replace(tzinfo=None)
+                except Exception:
+                    pass
+                return x
+            df[c] = s.apply(_to_naive)
+    return df
+
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 try:
     excel_path = f"resultados_completos_nba_{timestamp}.xlsx"
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-        # 1. Dataset completo com features
-        df_features_final.to_excel(writer, sheet_name='dataset_features', index=False)
+        _excel_safe(df_features_final).to_excel(writer, sheet_name='dataset_features', index=False)
+        _excel_safe(df_acuracia_time).to_excel(writer, sheet_name='acuracia_por_time', index=False)
 
-        # 2. Acurácia por time
-        df_acuracia_time.to_excel(writer, sheet_name='acuracia_por_time', index=False)
+        auc_pkf_str = f"{np.mean(purged_aucs):.4f}" if purged_folds else "N/A"
 
-        # 3. Métricas gerais
         metricas_gerais_data = {
             'Metrica': [
                 'Acurácia Geral', 'AUC-ROC', 'Log Loss', 'F1-Score',
@@ -1608,25 +1674,33 @@ try:
                 f"{(catboost_metrics['accuracy'] - baseline_acc):.4f}",
                 f"{len(test_df)}",
                 str(best_config),
-                f"{np.mean(purged_aucs) if purged_folds else 'N/A':.4f}"
+                auc_pkf_str
             ]
         }
         pd.DataFrame(metricas_gerais_data).to_excel(writer, sheet_name='metricas_gerais', index=False)
 
-        # 4. Feature importances
         if fi_df is not None:
-            fi_df.to_excel(writer, sheet_name='feature_importances', index=False)
+            _excel_safe(fi_df).to_excel(writer, sheet_name='feature_importances', index=False)
 
-        # 5. Comparação de modelos
-        comparison_df.to_excel(writer, sheet_name='comparacao_modelos')
+        _excel_safe(comparison_df).to_excel(writer, sheet_name='comparacao_modelos', index=False)
 
-        # 6. Resultados de ablação
-        ablation_results.to_excel(writer, sheet_name='ablation_analysis', index=False)
+        # Adicionar resultados OTW se disponíveis
+        if otw_results:
+            otw_comparison_data = []
+            for method_name, metrics in otw_results.items():
+                otw_comparison_data.append({
+                    'Método': method_name,
+                    'AUC_Médio': metrics['mean_auc'],
+                    'Desvio_AUC': metrics['std_auc'],
+                    'N_Jogos': metrics['n_games'],
+                    'Janela_Média': metrics['window_stats'].get('mean_window', 'N/A'),
+                    'Configuração': str(metrics['config'])
+                })
+            pd.DataFrame(otw_comparison_data).to_excel(writer, sheet_name='comparacao_otw', index=False)
 
-        # 7. Métricas detalhadas por threshold
         thresholds_data = []
         for threshold in [0.4, 0.45, 0.5, 0.55, 0.6]:
-            y_pred_thresh = (y_pred_proba_catboost >= threshold).astype(int)
+            y_pred_thresh = (y_pred_proba >= threshold).astype(int)
             thresholds_data.append({
                 'threshold': threshold,
                 'accuracy': accuracy_score(y_test, y_pred_thresh),
@@ -1643,58 +1717,12 @@ try:
     print("   - metricas_gerais: Métricas gerais do modelo")
     print("   - feature_importances: Importância das features")
     print("   - comparacao_modelos: Comparação com modelos baseline")
-    print("   - ablation_analysis: Resultados da ablação de features")
+    if otw_results:
+        print("   - comparacao_otw: Comparação de estratégias OTW")
     print("   - threshold_analysis: Análise por diferentes thresholds")
 
 except Exception as e:
     print(f"⚠️ Erro ao salvar Excel: {e}")
 
-# Salvar gráficos adicionais
-try:
-    # Feature importance gráfico detalhado
-    if fi_df is not None:
-        plt.figure(figsize=(12, 10))
-        top_features = fi_df.head(25)
-        plt.barh(top_features['feature'][::-1], top_features['importance'][::-1])
-        plt.title('Top 25 Feature Importances - CatBoost', fontsize=14)
-        plt.xlabel('Importance', fontsize=12)
-        plt.tight_layout()
-        plt.savefig(f'feature_importance_{timestamp}.png', dpi=300, bbox_inches='tight')
-        plt.show()
-
-    # SHAP summary plot
-    if len(X_test) >= 100:
-        print("\n📊 Gerando análise SHAP...")
-        sample_idx = np.random.choice(len(X_test), size=min(500, len(X_test)), replace=False)
-        X_sample = X_test.iloc[sample_idx]
-        explainer = shap.TreeExplainer(final_model)
-        shap_values = explainer.shap_values(X_sample)
-
-        plt.figure(figsize=(12, 8))
-        shap.summary_plot(shap_values, X_sample, show=False, plot_type='bar', max_display=20)
-        plt.title('SHAP Feature Importance (Global)')
-        plt.tight_layout()
-        plt.savefig(f'shap_summary_{timestamp}.png', dpi=300, bbox_inches='tight')
-        plt.show()
-
-except Exception as e:
-    print(f"⚠️ Erro ao gerar gráficos adicionais: {e}")
-
-# Gerar requirements
-generate_requirements()
-
-print("\n" + "=" * 80)
-print("✅ PIPELINE COMPLETO CONCLUÍDO!")
-print("=" * 80)
-print(f"📈 Performance Final do CatBoost:")
-print(f"   • Acurácia: {catboost_metrics['accuracy']:.4f}")
-print(f"   • AUC-ROC: {catboost_metrics['auc']:.4f}")
-print(f"   • F1-Score: {catboost_metrics['f1']:.4f}")
-print(f"🎯 Comparação com Baseline:")
-print(f"   • Melhoria: +{(catboost_metrics['accuracy'] - baseline_acc):.4f}")
-print(f"📊 Modelos Comparados: {list(baseline_results.keys())}")
-print(f"💾 Arquivos Salvos:")
-print(f"   • Excel completo: {excel_path}")
-print(f"   • Requirements: requirements.txt")
-print(f"   • Gráficos: feature_importance_{timestamp}.png, shap_summary_{timestamp}.png")
-print("=" * 80)
+print(f"\n🎯 CONFIGURAÇÃO FINAL OTW: {best_config}")
+print("✅ Experimento concluído com sucesso!")
