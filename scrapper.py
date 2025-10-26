@@ -59,7 +59,7 @@ def get_player_stats(game_id, max_retries=5):
 
 
 # ✅ PERÍODO AMPLIADO: De 2021 até agora
-start_date = datetime(2021, 10, 18)  # Começa em 2021
+start_date = datetime(2025, 10, 21)  # Começa em 2021
 end_date = datetime.now()  # Até a data atual
 
 all_games, all_player_stats = [], []
