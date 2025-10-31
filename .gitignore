@@ -1,0 +1,69 @@
+# Arquivo .gitignore para projetos LaTeX e arquivos de sistema
+
+# Arquivos intermediários do LaTeX
+*.aux
+*.bbl
+*.blg
+*.brf
+*.lof
+*.log
+*.lot
+*.toc
+*.out
+*.nav
+*.snm
+*.fdb_latexmk
+*.fls
+*.run.xml
+*.synctex.gz
+*.synctex(busy)
+*.xdv
+*.dvi
+*.ps
+*.eps
+
+# Arquivos de build/compilação e diretórios temporários
+_build/
+build/
+dist/
+latexbuild/
+_minted-*/
+*.pdfsync
+
+# Artefatos gerados (opcional: descomentar se não versionar PDFs)
+*.pdf
+
+# Arquivos de backup/temporários comuns
+*~
+*.swp
+*.swo
+*.swn
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.backup
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+._*
+
+# Configurações de IDE/editors
+.vscode/
+.idea/
+*.iml
+
+# Ambientes/artefatos de linguagens comuns
+__pycache__/
+venv/
+.env
+.env.local
+node_modules/
+
+# Outros arquivos indesejados
+tags
+*.log.gz

@@ -1,0 +1,622 @@
+% ------------------------------------------------------------------------
+% Senac Tex: Modelo de Trabalho Academico para o Centro Universitário
+% Senac
+% ------------------------------------------------------------------------
+
+% ========================================================================
+% CONFIGURAÇÃO DO DOCUMENTO
+% ========================================================================
+
+
+\documentclass[
+	% -- opções da classe memoir --
+	12pt,				% tamanho da fonte
+	openright,			% capítulos começam em pág ímpar (insere página vazia caso preciso)
+	oneside,			% para impressão em verso e anverso. Oposto a oneside
+	a4paper,			% tamanho do papel. 
+	% -- opções da classe abntex2 --
+	%chapter=TITLE,		% títulos de capítulos convertidos em letras maiúsculas
+	%section=TITLE,		% títulos de seções convertidos em letras maiúsculas
+	%subsection=TITLE,	% títulos de subseções convertidos em letras maiúsculas
+	%subsubsection=TITLE,% títulos de subsubseções convertidos em letras maiúsculas
+	% -- opções do pacote babel --
+	english,			% idioma adicional para hifenização
+	brazil				% o último idioma é o principal do documento
+	]{abntex2}
+
+% ---
+% Pacotes básicos 
+% ---
+\usepackage{lmodern}			% Usa a fonte Latin Modern			
+\usepackage[T1]{fontenc}		% Selecao de codigos de fonte.
+\usepackage[utf8]{inputenc}		% Codificacao do documento (conversão automática dos acentos)
+\usepackage{lastpage}			% Usado pela Ficha catalográfica
+\usepackage{indentfirst}		% Indenta o primeiro parágrafo de cada seção.
+\usepackage{color}				% Controle das cores
+\usepackage{graphicx}			% Inclusão de gráficos
+\usepackage{microtype} 			% para melhorias de justificação
+\usepackage{listings}
+\usepackage{indentfirst}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[top=3cm, bottom=2cm, left=3cm, right=2cm]{geometry}
+
+% ---
+% Pacotes de citações
+% ---
+\usepackage[brazilian,hyperpageref]{backref}	 % Paginas com as citações na bibl
+\usepackage[alf]{abntex2cite}	% Citações padrão ABNT
+
+% CONFIGURAÇÕES DE PACOTES
+
+% Configurações do pacote backref
+% Usado sem a opção hyperpageref de backref
+\renewcommand{\backrefpagesname}{Citado na(s) página(s):~}
+% Texto padrão antes do número das páginas
+\renewcommand{\backref}{}
+% Define os textos da citação
+\renewcommand*{\backrefalt}[4]{
+	\ifcase #1 %
+		Nenhuma citação no texto.%
+	\or
+		Citado na página #2.%
+	\else
+		Citado #1 vezes nas páginas #2.%
+	\fi}%
+
+% Informações de dados para CAPA e FOLHA DE ROSTO
+\titulo{Previsão de Resultados da NBA com CatBoost: Uma Análise Preditiva de Jogos}
+\autor{Erik Pires Zaina, Lucas Gonçalo de Morais, Murilo dos Santos Sena}
+\local{São Paulo - Brasil}
+\data{2025}
+\orientador{Alessandro Ranulfo Nery}
+%\coorientador{Nome do Coorientador}
+\instituicao{
+  Centro Universitário Senac - Santo Amaro
+  \par
+  Bacharelado em Ciência da Computação
+}
+\tipotrabalho{Trabalho de Conclusão de Curso}
+% O preambulo deve conter o tipo do trabalho, o objetivo, 
+% o nome da instituição e a área de concentração 
+\preambulo{Monografia apresentada na disciplina Trabalho de Conclusão de Curso, como parte dos requisitos para obtenção do título de Bacharel em Ciência da Computação.}
+
+% Configurações de aparência do PDF final
+
+% alterando o aspecto da cor azul
+\definecolor{blue}{RGB}{41,5,195}
+
+% informações do PDF
+\makeatletter
+\hypersetup{
+     	%pagebackref=true,
+		pdftitle={\@title}, 
+		pdfauthor={\@author},
+    	pdfsubject={\imprimirpreambulo},
+	    pdfcreator={LaTeX with abnTeX2},
+		pdfkeywords={abnt}{latex}{abntex}{abntex2}{trabalho acadêmico}, 
+		colorlinks=true,       		% false: boxed links; true: colored links
+    	linkcolor=black,          	% color of internal links
+    	citecolor=black,        		% color of links to bibliography
+    	filecolor=magenta,      		% color of file links
+		urlcolor=black,
+		bookmarksdepth=4
+}
+\makeatother
+
+% Espaçamentos entre linhas e parágrafos 
+
+% O tamanho do parágrafo é dado por:
+\setlength{\parindent}{1.25cm}
+
+% Controle do espaçamento entre um parágrafo e outro:
+\setlength{\parskip}{0.2cm}
+
+\SingleSpacing
+\makeatletter
+\let\@fnsymbol\@arabic
+\makeatother
+
+% compila o indice
+\makeindex
+
+\begin{document}
+
+% Retira espaço extra obsoleto entre as frases.
+\frenchspacing
+
+% ========================================================================
+% CAPA
+% ========================================================================
+\imprimircapa
+
+% ========================================================================
+% FOLHA DE ROSTO
+% ========================================================================
+\imprimirfolhaderosto
+
+% ========================================================================
+% LISTA DE ILISTRAÇÕES
+% ========================================================================
+\pdfbookmark[0]{\listfigurename}{lof}
+\listoffigures*
+\cleardoublepage
+
+% ========================================================================
+% LISTA DE TABELAS
+% ========================================================================
+\pdfbookmark[0]{\listtablename}{lot}
+\listoftables*
+\cleardoublepage
+
+% ========================================================================
+% LISTA DE ABREVIATURAS E SIGLAS
+% ========================================================================
+\begin{siglas}
+  \item[AI] Artificial Intelligence (Inteligência Artificial)
+  \item[API] Application Programming Interface (Interface de Programação de Aplicações)
+  \item[BPM] Box Plus/Minus
+  \item[EQM] Erro Quadrático Médio
+  \item[IA] Inteligência Artificial
+  \item[JSON] JavaScript Object Notation
+  \item[MDP] Markov Decision Process (Processo de Decisão de Markov)
+  \item[ML] Machine Learning (Aprendizado de Máquina)
+  \item[NBA] National Basketball Association
+  \item[OTW] Optimal Time Window (Janela Temporal Ótima)
+  \item[PER] Player Efficiency Rating
+  \item[SHAP] Shapley Additive Explanations
+  \item[SVM] Support Vector Machine (Máquina de Vetores de Suporte)
+  \item[VORP] Value Over Replacement Player
+  \item[XGBoost] Extreme Gradient Boosting
+\end{siglas}
+
+
+
+% ========================================================================
+% SUMÁRIO
+% ========================================================================
+\pdfbookmark[0]{\contentsname}{toc}
+\tableofcontents*
+\cleardoublepage
+
+\textual
+% ========================================================================
+% INTRODUÇÃO
+% ========================================================================
+\chapter{Introdução}
+
+
+\section{Contexto}
+
+O esporte profissional mudou muito na última década. A tomada de decisão deixou de depender quase só de intuição e avaliação subjetiva para adotar uma abordagem quantitativa baseada em dados. Esse movimento consolidou a análise esportiva como área que usa algoritmos, aprendizado de máquina e modelagem preditiva para entender o desempenho. A \textit{National Basketball Association} (NBA) é historicamente rica em dados, o recente avanço está na maior granularidade e acessibilidade, que ampliaram o uso de métodos quantitativos \citeonline{obi2024}.
+
+
+A avaliação de desempenho também mudou. Em vez de métricas isoladas e regras fixas, ganham espaço modelos adaptativos que aprendem padrões a partir de grandes históricos de jogos, treinos e dados físicos. Com isso, melhora-se a capacidade de prever resultados e de generalizar para novos cenários \citeonline{Sarlis}.
+
+Os efeitos são práticos. Um estudo com 12 temporadas da NBA encontrou correlação positiva e estatisticamente significativa entre o investimento em departamentos de análise e o número de vitórias. O resultado permaneceu mesmo controlando por fatores como folha salarial, experiência e química do elenco, estabilidade da comissão técnica e lesões. O tamanho e a qualificação da equipe de análise apareceram como preditores consistentes de sucesso em quadra \citeonline{henryWang}.
+
+No entanto, muitos modelos preditivos ainda se baseiam em estatísticas agregadas por equipe. Essa abordagem, embora útil, apresenta uma limitação fundamental: a NBA é uma liga impulsionada por jogadores. O desempenho de uma equipe pode variar significativamente em função de trocas, lesões ou simplesmente da rotação de atletas em partidas específicas \citeonline{kovacs2024}. Modelos que consideram apenas dados coletivos são, portanto, mais frágeis diante dessa volatilidade e incapazes de capturar as interações e contribuições individuais que frequentemente determinam o resultado dos jogos. Diante dessa lacuna, este trabalho propõe investigar se a incorporação de \textit{features} em nível de jogador, combinadas às métricas tradicionais de equipe, pode gerar um modelo mais preciso e mais resiliente à alta variabilidade característica da liga.
+
+A escolha do algoritmo é crucial para lidar com a complexidade dos dados esportivos, que incluem uma mistura de variáveis numéricas e categóricas (como time da casa vs. visitante, conferência, etc.). Para este fim, foi selecionado o CatBoost  \textit{(Categorical Boosting)}, um algoritmo de gradient boosting desenvolvido pela Yandex \citeonline{Prokhorenkova2018}. Sua principal vantagem é o tratamento nativo de características categóricas, eliminando a necessidade de pré-processamentos manuais que podem levar à perda de informação \citeonline{Prokhorenkova2018}. Além disso, o CatBoost implementa uma técnica chamada Ordered Boosting, projetada para reduzir o sobreajuste \textit{(overfitting)} e evitar um tipo de vazamento de dados \textit{(target leakage)} comum em outras implementações de boosting, resultando em modelos mais generalizáveis.
+
+Um dos maiores desafios na aplicação de aprendizado de máquina é o "dilema da caixa-preta" \textit{(black box dilemma)}. Modelos complexos como os de gradient boosting, apesar de sua alta precisão, são frequentemente opacos, dificultando a interpretação de suas previsões por parte dos tomadores de decisões \citeonline{OuYang2025}. Para que um modelo seja verdadeiramente útil, ele não deve apenas prever, mas também explicar o "porquê" por trás de suas decisões. 
+
+\section{Objetivos}
+
+Os objetivos deste trabalho estão divididos em objetivo geral, que se propõe a responder a questão de pesquisa, e objetivos específicos, que detalham os passos necessários para se atingir o objetivo geral.
+
+\subsection{Objetivo}
+
+Este trabalho tem como objetivo propor um modelo computacional para a previsão de resultados e apoio à decisão em jogos da NBA, com base em aprendizado de máquina e análise estatística avançada.
+
+\subsection{Objetivo Principal}
+O estudo aqui descrito pretende desenvolver um modelo baseado no algoritmo de gradient boosting (CatBoost), visando propor um método nele baseado, para a previsão de resultados de partidas da NBA. Neste caso, a própria forma recente das equipes e as estatísticas avançadas dos jogadores são utilizadas para verificar a probabilidade de vitória de cada time.
+
+A abordagem proposta busca definir de maneira mais fiel o momento (ou "forma") atual de uma equipe, utilizando janelas temporais adaptativas e pesos dinâmicas, permitindo assim descobrir com mais precisão os padrões que levam à vitória.
+
+\subsection{Objetivo Específico}
+\begin{itemize}
+    \item Criar um pipeline de engenharia de features para calcular métricas dinâmicas e adaptativas.
+    \item Criar um módulo para integrar e agregar estatísticas de desempenho individual de jogadores.
+    \item Treinar e validar o modelo usando um método de validação temporal cruzada com embargo.
+    \item Implementar um algoritmo de explicabilidade (SHAP) para analisar o impacto de cada feature nas previsões individuais.
+    \item Avaliar o desempenho e a calibração do modelo em dados de teste temporalmente isolados.
+\end{itemize}
+
+
+
+% ========================================================================
+% REVISÃO BIBLIOGRÁFICA
+% ========================================================================
+\chapter{Revisão Bibliográfica}
+
+Este capítulo apresenta os principais conceitos, métodos e estudos anteriores relacionados à modelagem computacional aplicada à previsão de resultados na NBA. Serão abordados os algoritmos de machine learning utilizados em predições esportivas, a importância da interpretabilidade, o contexto específico da NBA enquanto domínio da aplicação, além de técnicas como CatBoost, SHAP e a Janela Temporal Ótima (OTW).
+
+\section{National Basketball Association (NBA)}
+
+A National Basketball Association (NBA) é uma das principais ligas de basquete profissional do mundo, sediada na América do Norte e composta por 30 equipes divididas entre as conferêrencias Leste e Oeste \cite{BritannicaNBA}. Fundada oficialmente em 1949, a National Basketball Association (NBA) surgiu da fusão entre duas organizações rivais: a Basketball Association of America (fundada em 1946) e a National Basketball League (fundada em 1937). A NBA é reconhecida por reunir atletas de destaque internacional e desempenhar papel central no cenário global do basquete profissional \cite{BritannicaNBA}. Al\'em de seu apelo esportivo e de entretenimento, a NBA distingue-se pela abund\^ancia de dados estat\'isticos coletados a cada partida e temporada. Cada jogo gera uma rica folha estat\'istica (\textit{box score}) com dezenas de indicadores (pontos, rebotes, assist\^encias, etc.), al\'em de estat\'isticas agregadas por temporada. Ao longo das \'ultimas d\'ecadas, esse volume de dados impulsionou o surgimento de an\'alises quantitativas e m\'etricas avançadas no basquete, muitas das quais influenciaram tanto a comunidade acad\^emica quanto as decis\~oes gerenciais de times profissionais \cite{Oliver2004,Kubatko2007}
+
+
+\subsection{Métricas Avançadas no Basquete}
+
+Métricas avançadas são medidas estatísticas elaboradas com o objetivo de avaliar de forma mais acurada o desempenho de jogadores e equipes, indo além dos números tradicionais. Diversos pesquisadores e analistas pioneiros desenvolveram tais métricas. John Hollinger, por exemplo, introduziu o Player Efficiency Rating (PER), que combina os principais dados de box score de um jogador como pontos, rebotes, assistências, roubos, tocos e desperdícios de posse em um único índice de eficiência por minuto em quadra \citeonline{Hollinger2005}. O PER é padronizado para que a média da liga seja sempre 15, valores acima ou abaixo dessa média indicam o quão acima ou abaixo da média é a performance estatística do atleta. Os detalhes do cálculo, incluindo ajustes por ritmo de jogo (pace), são disponibilizados por plataformas especializadas como o \citeonline{BasketballRefPER}. Embora amplamente utilizado, o PER é criticado por não capturar aspectos defensivos mais sutis ou contribuições táticas intangíveis.
+
+Outra classe importante são as métricas baseadas em \textit{plus/minus}, que avaliam o impacto de um jogador no placar enquanto ele está em quadra. O chamado \textit{plus/minus} bruto registra a diferença de pontos do placar com o jogador em ação já o \textit{Box Plus/Minus} (BPM) é uma versão avançada que estima, a partir das estatísticas individuais de \textit{box score}, quantos pontos por 100 posses de bola um jogador adiciona (ou subtrai) ao placar de seu time em relação a um jogador médio \cite{Myers2020}. O BPM leva em conta fatores como eficiência ofensiva e defensiva do time quando o jogador está em quadra, tentando isolar a contribuição individual do atleta \cite{Myers2020}. Embora introdutoriamente descrito em trabalhos como o de Kubatko et al. (2007), que discutem métricas de \textit{plus/minus} e suas limitações, o BPM em si foi refinado posteriormente dentro da comunidade de analistas de basquete\cite{Kubatko2007}.
+
+
+\begin{figure}[H]
+\centering
+\caption{Distribuição dos valores de BPM 2.0 entre 1974 e 2019.}
+
+%%\includegraphics[width=8cm]{figuras/plusminus.png}
+\legend{Fonte: \url{https://www.basketball-reference.com/about/bpm2.html}}
+\label{fig:bpm_hist}
+\end{figure}
+
+
+
+\section{Inteligência Artificial}
+
+A Inteligência Artificial (IA) é o campo da computação dedicado ao desenvolvimento de sistemas capazes de realizar tarefas que normalmente requereriam inteligência humana, como reconhecimento de padrões e tomada de decisão. Desde os primórdios, nos anos 1950, busca-se criar agentes artificiais que percebam o ambiente e ajam de forma autônoma para atingir objetivos estabelecidos\cite{Russell2010}.
+
+\subsection{Aprendizado Supervisionado}
+
+No aprendizado supervisionado, o algoritmo recebe um conjunto de exemplos de treinamento compostos por pares de entrada e saída esperada (rótulo ou valor) \cite{mitchell1997}. O objetivo é aprender uma função ou modelo que mapeie as entradas para as saídas corretas, de forma geral para novos dados não vistos. Tipicamente, problemas supervisionados subdividem-se em classificação (quando a saída é uma classe ou categoria) e regressão (quando a saída é um valor numérico contínuo) \cite{Alpaydin2010}. Exemplos de algoritmos supervisionados incluem regressão logística, máquinas de vetores de suporte (SVM), árvores de decisão e redes neurais artificiais \cite{mitchell1997,Alpaydin2010}. 
+
+Esses algoritmos ajustam seus parâmetros internos para minimizar um erro de previsão em relação aos rótulos conhecidos do conjunto de treino. Quando bem-sucedido, o modelo resultante consegue generalizar o aprendizado para realizar previsões acuradas em novos dados \cite{mitchell1997}. Nos últimos anos, métodos de aprendizado profundo (\textit{deep learning}, redes neurais com muitas camadas) tornaram-se proeminentes dentro do paradigma supervisionado, alcançando avanços significativos em tarefas como reconhecimento de imagens e jogos estratégicos \cite{goodfellow2016}.
+ Embora redes profundas exijam grandes volumes de dados e poder computacional, elas demonstram o potencial do aprendizado supervisionado quando as condições de treinamento são favoráveis \cite{goodfellow2016}.
+
+\subsection{Métricas de Avaliação}
+A avaliação de modelos preditivos não deve se resumir a um único indicador. Neste trabalho, consideram-se três dimensões complementares: desempenho, discriminação e calibração. Desempenho mede o quanto o modelo acerta as classes. Discriminação avalia se o modelo consegue ordenar corretamente vencedores e perdedores ao atribuir probabilidades. Calibração verifica se as probabilidades previstas estão próximas das frequências observadas (por exemplo, \textit{Brier score} e curvas de calibração). Uma análise completa deve integrar essas três dimensões, ignorar qualquer uma delas pode levar a conclusões incompletas ou enganosas sobre a qualidade real do modelo \cite{jiang2020, giskard_calibration}
+
+\subsubsection{Métricas de Desempenho de Classificação}
+\subsubsection{A Matriz de Confusão}
+A Matriz de Confusão, também conhecida como matriz de erro, é uma tabela $N \times N$ que serve como base para a visualização e cálculo da performance de um classificador \cite{baheti_classification_metrics}. Para o problema binário de prever o resultado de um jogo da NBA (e.g., a equipe da casa vence), a matriz 2x2 compara os valores previstos pelo modelo com os valores reais \textit{(ground truth)} \cite{ibm_confusion_matrix}. A sua estrutura permite uma análise detalhada dos tipos de erros cometidos, fornecendo uma visão muito mais granular do que uma única métrica agregada pode oferecer.
+Os seus componentes fundamentais são:
+\begin{itemize}
+    \item Verdadeiros Positivos \textit{(TP - True Positives)}: O modelo prevê corretamente que a equipe da casa vence, e a equipe da casa de facto vence.
+    \item Verdadeiros Negativos \textit{(TN - True Negatives)}: O modelo prevê corretamente que a equipe da casa perde (ou seja, a equipe visitante vence), e a equipe da casa de facto perde.
+    \item Falsos Positivos \textit{(FP - False Positives)}: O modelo prevê que a equipe da casa vence, mas na realidade ela perde. Este erro é também conhecido como Erro Tipo I \cite{baheti_classification_metrics}. 
+    \item Falsos Negativos \textit{(FN - False Negatives)}: O modelo prevê que a equipe da casa perde, mas na realidade ela vence. Este erro é também conhecido como Erro Tipo II \cite{baheti_classification_metrics}.
+\end{itemize}
+Ao decompor as previsões nestas quatro categorias, a matriz de confusão revela não apenas quantos erros o modelo comete, mas também de que forma ele erra, o que é crucial para o diagnóstico e aprimoramento do modelo \cite{ibm_confusion_matrix}.
+\subsubsection{Acurácia}
+A acurácia é a métrica mais comum e intuitiva para avaliar modelos de classificação. É calculada como a proporção de previsões corretas (TP e TN) sobre o número total de previsões realizadas\cite{coursera_confusion_matrix}. A sua fórmula é:
+
+\[
+\text{Acurácia} = \frac{TP + TN}{TP + TN + FP + FN}
+\]
+
+Apesar de sua simplicidade, a acurácia pode ser enganosa em bases com classes desbalanceadas, algo comum no esporte. Na NBA, partidas entre um líder de conferência e o lanterna ilustram esse desequilíbrio. Métricas globais como a acurácia tendem a favorecer a classe majoritária e podem ocultar a incapacidade do modelo de reconhecer casos raros. Em um cenário em que o mandante tem 90\% de probabilidade de vitória, um classificador que sempre prevê vitória do mandante atinge 90\% de acerto sem, de fato, aprender padrões úteis. 
+
+Para a previsão de jogos da NBA, em que o objetivo é superar o conhecimento comum e as linhas de aposta, a acurácia isolada torna-se uma métrica de vaidade. Recomenda-se priorizar métricas mais avançadas ao desbalanceamento e a custos assimétricos de erro, como AUC-ROC, AUC-PR, F1, \textit{balanced accuracy}, além de medidas de calibração como \textit{Brier score} e curvas de calibração \cite{lopez}.
+
+\subsubsection{Precisão e Recall}
+Para superar as limitações da acurácia, a precisão e o recall oferecem uma avaliação mais focada na performance do modelo em relação à classe positiva.
+
+Precisão \textit{(Positive Predictive Value - PPV)} mede a proporção de previsões positivas que estavam de facto corretas. Responde à pergunta: "Das vezes que o modelo previu uma vitória da equipe da casa, quantas vezes acertou?" \cite{fawcett2006roc}. A sua fórmula é:
+
+$\text{Precisão} = \frac{TP}{TP + FP}$
+
+Recall (Sensibilidade ou Taxa de Verdadeiros Positivos - TPR) mede a proporção de positivos reais que foram corretamente identificados pelo modelo. Responde à pergunta: "De todas as vitórias reais da equipe da casa, quantas é que o modelo conseguiu prever?"\cite{fawcett2006roc}. A sua fórmula é: 
+
+$\text{Recall} = \frac{TP}{TP + FN}$
+
+Entre estas duas métricas existe um trade-off fundamental: otimizar uma geralmente leva à degradação da outra  \cite{ibm_confusion_matrix}. Um modelo que prevê "upsets" de forma muito liberal (com base em pouca evidência) terá um recall elevado (captura a maioria dos "upsets" reais), mas uma precisão baixa (muitos falsos alarmes). Por outro lado, um modelo conservador que só prevê um "upset" com evidência muito forte terá alta precisão, mas baixo recall \cite{fawcett2006roc}.
+
+A decisão de priorizar precisão ou recall não é puramente técnica, mas sim uma decisão estratégica que depende do objetivo do utilizador final.   
+ %% pensando se eu coloco a explicação aqui eu vai ficar coisa demais
+
+\subsubsection{F1-Score}
+
+O F1-Score combina a precisão e o recall numa única métrica, calculada como a sua média harmónica \cite{ibm_confusion_matrix}.
+
+$$\text{F1-Score} = 2 \times \frac{\text{Precisão} \times \text{Recall}}{\text{Precisão} + \text{Recall}}$$
+
+
+Esta métrica foi concebida para fornecer uma medida de performance equilibrada, sendo particularmente útil quando as classes são desbalanceadas e quando a importância de FPs e FNs é semelhante. Ao contrário da média aritmética, a média harmónica penaliza fortemente valores extremos. Isto significa que um F1-Score elevado só é alcançado quando tanto a precisão como o recall são elevados, tornando-o um indicador mais sólido da performance geral do que a acurácia em cenários não ideais \cite{ibm_confusion_matrix}.
+
+\begin{table}[htbp]
+\caption{Resumo das Métricas de Desempenho de Classificação}
+\label{tab:metricas-classificacao}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.25}
+\newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
+\begin{tabularx}{\textwidth}{|l|c|L|L|L|}
+\hline
+\textbf{Métrica} & \textbf{Fórmula} & \textbf{Pergunta respondida} & \textbf{Vantagens} & \textbf{Limitações e contexto na NBA} \\
+\hline
+Acurácia &
+$\dfrac{\mathrm{TP}+\mathrm{TN}}{\mathrm{TP}+\mathrm{TN}+\mathrm{FP}+\mathrm{FN}}$ &
+Proporção de previsões corretas no total. &
+Simples e intuitiva. &
+Pode ser enganosa em jogos desiguais e mascarar a incapacidade de prever \textit{upsets}. \\
+\hline
+Precisão &
+$\dfrac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}}$ &
+Das previsões de vitória, quantas estavam corretas. &
+Mede a confiabilidade das previsões positivas. &
+Ignora falsos negativos; importante para manter credibilidade. \\
+\hline
+Recall &
+$\dfrac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}}$ &
+De todas as vitórias reais, quantas foram previstas. &
+Mede a capacidade de detectar eventos positivos. &
+Ignora falsos positivos; pode levar à perda de oportunidades de valor. \\
+\hline
+F1-Score &
+$2 \times \dfrac{P \times R}{P + R}$ &
+Equilíbrio entre precisão e recall. &
+Robusto ao desbalanceamento de classes. &
+Menos interpretável do que precisão e recall isoladamente. \\
+\hline
+\end{tabularx}
+
+\vspace{2mm}
+\footnotesize
+$TP$ = verdadeiros positivos; $TN$ = verdadeiros negativos; $FP$ = falsos positivos; $FN$ = falsos negativos; $P$ = precisão; $R$ = recall.\\
+Fonte: elaboração própria.
+\end{table}
+
+
+\subsubsection{Métricas de Discriminação}
+Enquanto as métricas de desempenho avaliam o resultado final da classificação, as métricas de discriminação avaliam a capacidade intrínseca do modelo de separar as duas classes (vitória vs. derrota), independentemente de um limiar de classificação específico.
+
+
+\subsubsection{Curva ROC}
+As métricas da seção anterior dependem de um limiar de decisão para converter scores contínuos em classificações discretas. No entanto, este limiar é arbitrário e raramente é o ideal.1 A análise de discriminação avalia a qualidade dos scores do modelo em toda a gama de limiares possíveis \cite{fawcett2006roc}.
+
+$$\text{FPR} = \frac{FP}{FP + TN} $$\
+
+A curva é gerada ao variar continuamente o limiar de decisão de 1 (mais restritivo) a 0 (mais permissivo). Para cada limiar, um novo par (FPR, TPR) é calculado e plotado, formando a curva \cite{fawcett2006roc}.
+
+
+\begin{itemize}
+  \item Linha diagonal ($y=x$): representa um classificador aleatório, sem poder preditivo. Um modelo útil deve ter a curva acima dessa linha \cite{fawcett2006roc}.
+  \item Canto superior esquerdo $(0,1)$: representa o classificador perfeito, com $\mathrm{TPR}=1$ e $\mathrm{FPR}=0$ \cite{fawcett2006roc}.
+  \item Posição na curva: pontos no canto inferior esquerdo indicam comportamento conservador (baixo $\mathrm{FPR}$ e também baixo $\mathrm{TPR}$), enquanto pontos no canto superior direito indicam comportamento liberal (alto $\mathrm{TPR}$ e também alto $\mathrm{FPR}$). O gráfico torna explícito o \textit{trade-off} entre o benefício de detectar positivos e o custo de alarmes falsos \cite{fawcett2006roc}.
+\end{itemize}
+
+\subsubsection{Área Sob a Curva (AUC)}
+
+A Área Sob a Curva (AUC) é uma métrica escalar que resume a curva ROC num único número, representando a área geométrica sob a curva. O seu valor varia entre 0.5 (para um classificador aleatório) e 1.0 (para um classificador perfeito) \cite{fawcett2006roc}.
+
+A AUC possui uma interpretação estatística particularmente intuitiva e poderosa: é a probabilidade de que o modelo atribua uma pontuação de previsão mais alta a uma instância positiva (uma vitória real) escolhida aleatoriamente do que a uma instância negativa (uma derrota real) escolhida aleatoriamente.
+
+Esta interpretação revela uma propriedade fundamental da AUC: ela mede a qualidade do "ranking" interno do modelo, independentemente dos valores absolutos das probabilidades. Um modelo que atribui uma probabilidade de 0.1 a todas as derrotas e 0.2 a todas as vitórias terá uma AUC perfeita de 1.0, pois consegue separar perfeitamente as classes, embora as probabilidades em si não sejam realistas. A AUC mede, portanto, a capacidade de discriminação ou separação do modelo. Um valor de AUC elevado indica que o modelo aprendeu padrões que distinguem fundamentalmente as vitórias das derrotas. É uma medida robusta da qualidade do "motor" preditivo do modelo, independente de como as suas saídas são calibradas ou de qual limiar de decisão é escolhido, tornando-a uma das métricas mais importantes para comparar o poder preditivo fundamental de diferentes modelos \cite{fawcett2006roc}.
+
+
+\subsubsection{Métricas de Calibração}
+
+A calibração avalia se as probabilidades previstas por um modelo correspondem às frequências reais dos eventos \cite{guo2017calibration}. Um modelo bem calibrado é aquele cujas previsões podem ser interpretadas como probabilidades confiáveis: para todos os casos aos quais o modelo atribui, por exemplo, 80\% de probabilidade de ocorrência, espera-se que o evento realmente ocorra em cerca de 80\% das vezes. É importante ressalta r que um modelo pode apresentar excelente discriminação isto é, elevada capacidade de distinguir entre classes, refletida por uma alta área sob a curva ROC (AUC) e ainda assim ser mal calibrado \cite{wang2025calibration}.
+
+A má calibração é um problema recorrente em redes neurais modernas e em outros modelos complexos, que tendem a produzir previsões excessivamente confiantes (\textit{overconfident}) em relação à probabilidade real dos eventos \cite{guo2017calibration}.
+
+Para uma avaliação quantitativa, o Brier Score é uma das métricas mais utilizadas \cite{renooij2004uncertaintruth}. Proposto originalmente para a verificação de previsões meteorológicas, ele mede o erro quadrático médio entre as probabilidades previstas ($p_i$) e os resultados reais ($o_i$, codificados como 1 para ocorrência e 0 para não ocorrência). Para previsões binárias, a fórmula é:
+
+$$\text{Brier Score} = \frac{1}{N} \sum_{i=1}^{N} (p_i - o_i)^2$$
+
+O Brier Score é uma proper scoring rule, o que significa que o valor mínimo esperado da métrica é alcançado apenas quando o modelo prevê as verdadeiras probabilidades. Seus valores variam de 0 a 1, onde um score mais baixo indica melhor calibração e acurácia das probabilidades. Ele combina, em uma única medida, tanto a calibração quanto a resolução (a capacidade do modelo de emitir previsões "afiadas", ou seja, próximas de 0 ou 1), tornando-se uma medida abrangente da qualidade da previsão probabilística \cite{renooij2004uncertaintruth}. 
+
+\subsection{Aprendizado de Máquina}
+
+O Aprendizado de Máquina (ML), uma das principais subáreas da IA, desenvolve algoritmos que permitem ao computador aprender padrões ou comportamentos a partir de dados e melhorar seu desempenho em tarefas específicas. Uma definição clássica descreve que um algoritmo de ML explora dados de treinamento para induzir um modelo capaz de fazer predições ou decisões sem ser explicitamente programado para cada caso \cite{mitchell1997}.
+
+Os métodos de ML costumam ser categorizados em aprendizado supervisionado, não supervisionado e por reforço, sendo este trabalho focado em técnicas supervisionadas de classificação. Nos últimos anos, redes neurais profundas (aprendizado profundo) alcançaram avanços notáveis em tarefas complexas como visão computacional e jogos estratégicos\cite{goodfellow2016}, contudo, esses modelos tipicamente requerem grandes volumes de dados e alto poder computacional. Para dados estruturados tabulares, técnicas de \textit{ensemble} baseadas em árvores de decisão, como o \textit{boosting}, têm se destacado pela alta eficácia preditiva.
+
+%%Realmente, acho que vai ter importância explicar o ensamble 
+
+A técnica de \textit{boosting}, introduzida por Freund e Schapire\cite{Freund1997} e posteriormente generalizada por Friedman\cite{Friedman2001}, combina múltiplos modelos fracos de forma sequencial para formar um modelo final mais robusto. Implementações modernas, como o XGBoost\cite{Chen2016} e o CatBoost\cite{Prokhorenkova2018}, incorporam diversas otimizações e obtêm desempenho de ponta em muitos cenários de classificação e regressão.
+
+%%Aqui eu acho que esse último paragráfo é melhor que o primeiro paragráfo dos algoritmos de boosting
+
+\subsubsection{Algoritmos de Boosting}\label{subsec:boosting-geral} O boosting é uma técnica de aprendizado de máquina que combina vários modelos simples (``fracos'') de forma sequencial para formar um modelo final mais forte e preciso\cite{AWSBoosting}. 
+
+Em cada iteração do processo de boosting, um novo modelo é treinado para corrigir os erros do conjunto de modelos anteriores, focando especialmente nas instâncias que foram preditas incorretamente nas etapas precedentes. Diferentemente do \emph{bagging} (onde modelos são treinados em paralelo em subconjuntos aleatórios dos dados), no boosting os modelos são ajustados em sequência adaptativa, de modo que cada modelo adicional concentra-se nos erros do anterior. Essa estratégia iterativa tende a reduzir o viés do modelo e, quando bem regulamentada, produz modelos de alta acurácia em tarefas de classificação e regressão\cite{AWSBoosting}. Um dos primeiros e mais influentes algoritmos dessa família é o AdaBoost (\emph{Adaptive Boosting}), proposto por Freund e Schapire na década de 1990 \cite{Freund1997}.
+
+O AdaBoost foi concebido para problemas de classificação binária e mostrou empiricamente como combinar múltiplos classificadores fracos (por exemplo, árvores de decisão rasas ou \emph{stumps}) pode gerar um classificador forte com desempenho significativamente melhor \cite{Freund1997}. Em cada iteração do AdaBoost, os pesos associados a cada instância de treinamento são ajustados: exemplos que foram classificados incorretamente pelo modelo anterior têm seus pesos aumentados, enquanto exemplos classificados corretamente têm seus pesos reduzidos. Em seguida, um novo classificador fraco é treinado com base nesses pesos ajustados, enfatizando os exemplos difíceis. Cada classificador recebe uma ponderação $\alpha_m$ proporcional à sua performance (tipicamente calculada como uma função do erro de classificação), e a predição final do ensemble é obtida por uma votação ponderada desses classificadores \cite{Freund1997}. Do ponto de vista teórico, demonstra-se que o AdaBoost minimiza aproximadamente uma função de perda exponencial, o que ajuda a explicar seu sucesso em reduzir erros de generalização em diversas aplicações \cite{Schapire2012}. Aplicações típicas do AdaBoost incluem tarefas de classificação em visãocomputacional (por exemplo, detecção de faces) e outras áreas onde a interpretabilidade e a simplicidade dos classificadores fracos são vantajosas, embora hoje existam variantes mais robustas para dados complexos. 
+
+Outro avanço fundamental foi a introdução do Gradient Boosting (boosting por gradiente), generalizado por Friedman \cite{Friedman2001}. Enquanto o AdaBoost ajusta iterativamente os modelos dando ênfase a erros de classificação, o Gradient Boosting reformula o problema de boosting como a otimização de uma função de perda arbitrária por meio de descida de gradiente em espaço de funções \cite{Friedman2001}. Nessa abordagem, em cada etapa $m$ ajusta-se um novo modelo base $h_m(x)$ para aproximar o gradiente negativo da função de perda (os esíduos) do modelo atual em relação aos dados de treinamento. Em outras palavras, o modelo sequencialmente tenta corrigir os resíduos (erros) do modelo conjunto anterior. Esse framework é bastante flexível: permite usar diferentes funções de perda (ex.: erro quadrático para regressão, deviação binária para classificação) e diferentes modelos base (embora sejam comumente utilizadas árvores de decisão CART de média profundidade como aprendizes fracos).
+
+O Gradient Boosting provou ser altamente eficaz em uma variedade de domínios, pois combina a capacidade preditiva de modelos de alta variância (como árvores de decisão) com a redução de viés proporcionada pelo esquema de boosting. Ele rapidamente se tornou uma das técnicas de referência para dados tabulares, exibindo desempenho superior em muitas tarefas de classificação e regressão onde modelos lineares ou até redes neurais não capturam tão bem interações complexas entre variáveis\cite{McElfresh2024}.
+
+Com o crescente uso do boosting em aplicações do mundo real, surgiram melhorias práticas no algoritmo de Friedman. Uma das mais proeminentes é o XGBoost (\emph{eXtreme Gradient Boosting}), proposto por Tianqi Chen \cite{Chen2016}. O XGBoost é essencialmente uma implementação otimizada do Gradient Boosting que incorpora diversas inovações para torná-lo mais rápido, escalável e ainda mais preciso. Dentre as contribuições técnicas do XGBoost estão: (i) a utilização de uma formulação de segunda ordem para a otimização o algoritmo calcula não apenas os gradientes primeiro-ordem, mas também o Hessiano (gradientes de segunda ordem) da função de perda para orientar o crescimento das árvores, o que acelera a convergência e pode melhorar a qualidade dos \emph{splits}\cite{Chen2016}, (ii) a introdução de um termo de regularização explícito na função objetivo, penalizando a complexidade das árvores (por exemplo, número de folhas e magnitude dos pesos nas folhas) para evitar sobreajuste \cite{Chen2016}; (iii) otimizações de computação, como processamento em paralelo dos nós da árvore, compressão de dados em memória e tratamento eficiente de valores ausentes e atributos esparsos. 
+
+%Sinceramente, pensando em remover a parte matemática do XGBoost, já que não é nosso foco,
+
+% Em termos simples, a função objetivo otimizada pelo XGBoost pode ser escrita como: 
+
+% \begin{equation}
+% L(\Theta) = \sum_{i} \ell(y_i, \hat{y}_i) + \sum_{k} \Omega(f_k)
+% \end{equation}
+
+% 
+% Onde $\ell$ é a perda (por exemplo, erro quadrático, logística, etc.) e $\Omega(f_k)$ é o termo de regularização para a $k$-ésima árvore do ensemble \cite{Chen2016}. Essa regularização orienta o algoritmo a selecionar divisões que equilibrem bem a redução do erro de treinamento com a simplicidade do modelo. Graças a essas melhorias, o XGBoost alcançou enorme popularidade na comunidade de ciência de dados. Para se ter uma ideia, entre 29 soluções vencedoras de competições no site Kaggle em 2015, 17 utilizaram o XGBoost em seus modelos (sendo que 8 dessas soluções usaram o XGBoost como único modelo final), evidenciando seu desempenho competitivo em problemas do mundo real \cite{Chen2016}. O XGBoost é amplamente empregado em aplicações industriais e acadêmicas que envolvem dados estruturados, incluindo detecção de fraudes, pontuação de crédito, previsão de demanda e diversas outras tarefas de classificação e regressão. Sua eficácia é particularmente destacada em conjuntos de dados de tamanho médio, onde modelos baseados em árvores, como o XGBoost, frequentemente superam redes neurais, especialmente quando as características possuem relações complexas que árvores podem capturar eficazmente.\cite{Hajek2022, Xia2023, Grinsztajn2022, ShwartzZiv2021}.
+
+
+
+\begin{figure}[htb]
+    \centering
+        \caption{Funcionamento do boosting como técnica de aprendizado de máquina baseada em múltiplos classificadores sequenciais.}
+    %%\\includegraphics[width=0.9\textwidth]{figuras/Texto do seu parágrafo (1).png}
+    \legend{Fonte: \url{https://commons.wikimedia.org/wiki/File:Ensemble_Boosting.svg}}
+    \label{fig:boosting}
+\end{figure}
+
+\subsubsection{CatBoost}\label{subsec:catboost} O CatBoost (do inglês \emph{Category Boosting}) é um algoritmo mais recente de boosting por gradiente, desenvolvido pela equipe da Yandex, que se destaca por oferecer melhorias técnicas específicas em relação a implementações anteriores como o XGBoost e outros \cite{Prokhorenkova2018}.
+
+Assim como estes, o CatBoost constrói um ensemble de árvores de decisão de forma sequencial para minimizar uma função de perda, porém, ele introduz técnicas que visam resolver problemas particulares do boosting tradicional, especialmente no tratamento de variáveis categóricas e na redução de vieses durante o treinamento. Essas inovações permitem ao CatBoost obter desempenho semelhante ou superior aos demais métodos de boosting em muitos cenários, além de facilitar seu uso em problemas com dados heterogêneos \cite{Prokhorenkova2018}.
+
+Matematicamente, o CatBoost busca minimizar a função de perda esperada
+\[
+L(F) = \mathbb{E}_{(x,y)} \left[ \ell(y, F(x)) \right],
+\]
+onde $F:\mathbb{R}^m \to \mathbb{R}$ é o modelo preditor, $\ell$ é uma função de perda convexa e suave, e $(x,y)$ são os dados de entrada e alvo, respectivamente. Em cada iteração $t$, o modelo é atualizado adicionando uma árvore $h_t$ que aproxima o gradiente negativo da perda:
+\[
+F^{t}(x) = F^{t-1}(x) + \alpha h_t(x),
+\]
+com $\alpha$ sendo a taxa de aprendizado. A árvore $h_t$ é obtida ao resolver
+\[
+h_t = \arg\min_{h \in \mathcal{H}} \mathbb{E}_{(x,y)} \left[ \left(-g_t(x,y) - h(x)\right)^2 \right],
+\]
+Onde:
+\[
+g_t(x,y) = \left. \frac{\partial \ell(y, s)}{\partial s} \right|_{s=F^{t-1}(x)}
+\]
+é o gradiente da função de perda em relação à predição atual.
+
+Uma das principais vantagens do CatBoost é o tratamento nativo de variáveis categóricas. Diferentemente do XGBoost e da maioria dos algoritmos de árvore, que exigem converter variáveis categóricas em representações numéricas (por exemplo, via codificação one-hot, label encoding ou embeddings fornecidos pelo usuário), o CatBoost lida internamente com atributos categóricos de forma eficiente \cite{Prokhorenkova2018}. Ele emprega uma técnica de \emph{target encoding} especial chamada de estatísticas ordenadas (\emph{ordered target statistics}), na qual os valores categóricos são transformados com base nas estatísticas de resposta (média ou likelihood do alvo) calculadas a partir dos dados de treinamento sem introduzir vazamento de informação do alvo (target leakage) \cite{Prokhorenkova2018}.
+
+Em termos práticos, para cada exemplo $k$, o valor codificado $\hat{x}_{ik}$ para a variável categórica $i$ é calculado como
+
+\[
+\hat{x}_{ik} = \frac{\sum_{j:\sigma(j) < \sigma(k)} \mathbf{1}\{x_{ij} = x_{ik}\} y_j + a p}{\sum_{j:\sigma(j) < \sigma(k)} \mathbf{1}\{x_{ij} = x_{ik}\}  + a},
+\]
+Onde:
+$\sigma$ é uma permutação aleatória dos índices das amostras, usada para garantir que apenas exemplos "anteriores" sejam considerados e evitar o vazamento de informação futura,
+ $a > 0$ é um parâmetro de suavização que evita divisão por zero e controla o peso da constante $p$,
+ $p$ é uma constante, tipicamente a média global do alvo,
+ $\mathbf{1}\{\cdot\}$ é a função indicadora, que vale 1 se a condição é verdadeira e 0 caso contrário.
+
+Essa abordagem se traduz no seguinte processo: o CatBoost percorre o conjunto de treinamento em diferentes permutações aleatórias e, para cada categoria, calcula gradualmente a média do alvo considerando apenas observações anteriores na ordem percorrida, junto com um termo de suavização bayesiana. Dessa forma, cada exemplo nunca contribui para a codificação de si mesmo, evitando viés. O resultado final é uma representação numérica de cada categoria que reflete a tendência de seu valor de acordo com os dados já vistos, minimizando overfitting e preservando a ordem temporal durante o treinamento \cite{Prokhorenkova2018}.
+
+Em resumo, o CatBoost automatiza o manejo de dados categóricos, poupando trabalho de pré-processamento e frequentemente resultando em modelos mais acurados quando há muitas variáveis não numéricas. Outra inovação crucial introduzida pelo CatBoost é o chamado \emph{ordered boosting} (boosting ordenado). No \emph{boosting} convencional (como Gradient Boosting e XGBoost), ao treinar o $m$-ésimo modelo do ensemble, utiliza-se todo o conjunto de treinamento atual (com as respostas reais) para calcular os resíduos ou gradientes inclusive para as próprias instâncias que esse modelo $m$ irá ajustar. Isso pode levar a um leve vazamento de informação, pois a etapa $m$ “vê” o valor real que deveria prever, ainda que como parte do cálculo do resíduo. O CatBoost resolve esse problema treinando cada nova árvore de decisão em um modo restrito: ele cria divisões ordenadas do dataset (novamente usando permutações aleatórias) e garante que, para calcular os resíduos e decidir os melhores \emph{splits} de uma nova árvore, sejam utilizadas apenas estatísticas obtidas de instâncias que já foram predizidas em etapas anteriores (ou que estão em outras partições), evitando que uma árvore em treinamento “se veja no espelho” \cite{Prokhorenkova2018}.
+
+Além disso, o CatBoost adota árvores de decisão simétricas (também chamadas \emph{oblivious trees}) em sua construção do ensemble \cite{Prokhorenkova2018}. Diferentemente das árvores de decisão tradicionais, em que cada nó pode dividir por um critério diferente gerando estruturas irregulares, as árvores simétricas impõem que, em cada nível da árvore, todas as divisões ocorram pela mesma variável. Em outras palavras, a estrutura da árvore é balanceada e predefinida: primeiro todos os nós dividem pela variável $X$, depois todos os nós resultantes dividem pela variável $Y$, e assim por diante, independentemente de qual caminho na árvore está sendo considerado. Assim, as árvores simétricas contribuem para que o CatBoost mantenha desempenho em termos de velocidade e também reduzam a complexidade do modelo, o que pode ser vantajoso em dados com alto ruído ou altamente desequilibrados. Graças a esse conjunto de aprimoramentos, o CatBoost apresenta um desempenho vantajoso em comparação a demais  métodos de boosting. Os desenvolvedores do CatBoost reportaram que a combinação das técnicas de \emph{ordered boosting} e codificação eficiente de variáveis categóricas levou o algoritmo a superar implementações públicas existentes (como XGBoost e LightGBM) em termos de qualidade preditiva em uma variedade de conjuntos de dados benchmark \cite{Prokhorenkova2018}. Em particular, em tarefas com muitas variáveis categóricas ou com classes desbalanceadas, o CatBoost tende a se destacar: a abordagem livre de vazamentos evita favorecer indevidamente a classe majoritária durante o treinamento, e o algoritmo permite ajustar facilmente pesos para classes minoritárias se necessário, resultando em melhor equilíbrio entre desempenho e generalização. Em cenários gerais, mesmo sem ajustes específicos, o CatBoost frequentemente alcança acurácia igual ou superior à de seus concorrentes, necessitando menos engenharia de atributos por parte do usuário \cite{Prokhorenkova2018}. Além disso, seu desempenho com dados ruidosos e heterogêneos o torna atrativo em aplicações do mundo real. 
+
+
+\begin{figure}[H]
+    \centering
+    \caption{Fluxo do algoritmo CatBoost baseado em Gradiente Boosting. O modelo é treinado com subconjuntos amostrados via bootstrap, com atualização sequencial de pesos e preditores.}
+   %%\ \includegraphics[width=0.9\textwidth]{figuras/Dataset.png}
+    \legend{Fonte: Adaptado de \citeonline{zeng2023}. }
+    \label{fig:catboost}
+\end{figure}
+
+
+\section{SHAP (Shapley Additive exPlanations)}
+
+Conforme modelos de aprendizado de máquina tornaram-se mais complexos e opacos (como \textit{ensembles} de árvores ou redes neurais profundas), surgiu a necessidade de técnicas de interpretabilidade que permitam entender as predições produzidas. Dentre essas técnicas, o método SHAP (\textit{Shapley Additive exPlanations}) destacou-se pela fundamentação teórica e pela consistência das explicações geradas \cite{Lundberg2017}. O SHAP, proposto por Scott Lundberg e Su-In Lee, baseia-se no conceito de valor de Shapley da Teoria dos Jogos cooperativos. Em um jogo cooperativo, o valor de Shapley define como distribuir de forma justa a recompensa total obtida por uma coalizão de jogadores, atribuindo a cada jogador uma parcela da recompensa proporcional à sua contribuição marginal média. Analogamente, no contexto de modelos preditivos, cada “jogador” é uma \textit{feature} (variável de entrada) e a “recompensa” é a diferença entre a predição do modelo para uma instância e a predição média do modelo (ou de um baseline) \cite{Lundberg2017}. O SHAP então calcula, para uma dada instância, quanto cada feature contribuiu positiva ou negativamente para que o modelo produzisse aquele resultado em comparação a uma predição base.
+
+Matematicamente, o SHAP pertence à classe dos métodos aditivos de explicação, cuja predição é representada como:
+\[
+\hat{y} = \phi_{0} + \sum_{i=1}^{M} \phi_{i},
+\]
+onde $\phi_{i}$ é o valor SHAP da feature $i$ \cite{Lundberg2017}. Esses valores $\phi_{i}$ são calculados considerando todas as coalizões possíveis de features sem a presença de $i$ e avaliando o impacto médio da adição de $i$ à predição (tomando a média sobre todas as ordens de inserção). Embora o cálculo exato seja computacionalmente custoso (exponencial no número de features), Scott Lundberg e Su-In Lee propuseram algoritmos de aproximação eficientes, especialmente para modelos de árvores de decisão, tornando viável a utilização do SHAP na prática.
+
+
+As principais propriedades do SHAP incluem: (i) consistência, ou seja, se um modelo for alterado de forma que a contribuição marginal de uma feature aumente (mantidas as demais constantes), o valor SHAP dessa feature não diminui; (ii) localidade exata, significando que a soma dos valores SHAP de todas as features (mais o valor base $\phi_{0}$) é igual à diferença entre a predição do modelo para aquela instância e a média global \cite{Lundberg2017}. Essas propriedades garantem que as explicações sejam sensíveis e coerentes com o comportamento do modelo.
+
+% No contexto do nosso projeto, a adoção do SHAP se justifica pela necessidade de interpretar as predições do modelo preditivo de resultados da NBA, tornando possível identificar quais fatores (estatísticas de jogo, métricas do time etc.) mais influenciaram a previsão de vitória ou derrota em uma partida. A literatura ressalta a importância da interpretabilidade em modelos esportivos, pois decisões baseadas apenas em um “palpite” de caixa-preta podem não ser confiáveis para técnicos e analistas sem uma justificativa clara \cite{Lundberg2017}.
+
+Com o SHAP, pode-se, por exemplo, explicar por que um determinado jogo foi previsto como vitória do Time~A: os valores SHAP poderiam revelar que a excelente média de aproveitamento de arremessos do Time~A e um número superior de rebotes previstos contribuíram positivamente para a predição, enquanto o fato de o adversário jogar em casa contribuiu negativamente mas não o suficiente para reverter a tendência. Essa granularidade de explicação é valiosa, pois agrega confiabilidade ao modelo e permite insights acionáveis, por exemplo, destacar a importância de certos fundamentos do jogo.
+
+Estudos recentes já começaram a aplicar o SHAP na área de análise esportiva: \citeonline{OuYang2025}, por exemplo, utilizaram SHAP para interpretar quais estatísticas de desempenho tinham maior peso nas vitórias de equipes da liga chinesa de basquete, demonstrando o potencial da ferramenta em extrair conhecimento mesmo de modelos complexos. Diante disso, o uso do SHAP neste projeto alinha-se com a busca por um modelo não apenas preciso, mas também transparente e explicável.
+
+\begin{figure}[H]
+    \centering
+        \caption{Framework do algoritmo SHAP (2025).}
+  %%\  \includegraphics[width=0.5\textwidth]{figuras/Dados.png}
+    \legend{Fonte: Adaptado de \url{https://www.researchgate.net/figure/Framework-of-the-SHAP-algorithm_fig1_390988996}}
+    \label{fig:shap-framework}
+\end{figure}
+
+
+\section{OTW: Optimal Time Window}
+
+A \textit{Optimal Time Window} (OTW) é uma abordagem proposta para otimizar a seleção de dados históricos utilizados no treinamento de modelos preditivos esportivos, determinando qual intervalo temporal de partidas passadas deve ser considerado para melhor refletir o estado atual das equipes \cite{Horvat2020PhD}. A ideia central é que nem todos os jogos passados possuem a mesma relevância preditiva, jogos muito antigos podem não refletir mais a força atual de um time (devido a mudanças de elenco, técnico, estratégias), enquanto considerar apenas jogos muito recentes pode resultar em pouco volume de dados e maior volatilidade estatística \cite{Horvat2020PhD}. Assim, haveria uma “janela de tempo ótima” por exemplo, os \textit{N} jogos ou \textit{X} temporadas mais recentes que oferece o melhor balanço entre frescor dos dados e tamanho de amostra para treinar o modelo.
+
+\citeonline{Horvat2020PhD} introduziu um método sistemático para identificar essa janela temporal ideal, integrado a um modelo de previsão de resultados de jogos de basquete. Em sua tese de doutorado, Horvat propôs um modelo adaptativo baseado em um índice de eficiência das equipes, no qual a OTW é definida de maneira a maximizar a correlação entre o índice de eficiência calculado e os resultados dos jogos \cite{Horvat2020PhD}. Em termos práticos, isso significa determinar quantos jogos ou até que ponto da temporada passada (ou temporadas passadas) devem ser utilizados no cálculo das variáveis preditivas para que estas tenham maior poder explicativo sobre o próximo jogo. Por exemplo, pode-se descobrir que usar estatísticas acumuladas das últimas 20 partidas de cada equipe produz um modelo preditivo mais acurado do que usar toda a temporada anterior ou apenas as últimas cinco partidas.
+
+No trabalho recente de \citeonline{horvat2023}, o conceito de OTW foi incorporado em experimentos de previsão de jogos da NBA, e os resultados corroboram em parte sua utilidade. Ao testar diferentes comprimentos de janela, os autores observaram que a escolha de uma janela de tempo ótima trouxe um pequeno ganho de acurácia em relação ao uso irrestrito de todos os dados históricos disponíveis \cite{horvat2023}. Em particular, o melhor resultado (acurácia em torno de 78~\%) foi obtido treinando o modelo com dados de apenas uma temporada anterior (como janela de treino) e testando na temporada seguinte, sugerindo que dados de mais de duas temporadas atrás adicionavam mais ruído do que sinal \cite{horvat2023}. Esse achado está alinhado com a intuição de que a NBA está em constante evolução jogadores transferem-se, novos talentos surgem, times mudam de estratégia e, portanto, limitar a abrangência temporal do treinamento pode ajudar o modelo a se concentrar em padrões mais pertinentes ao momento atual.
+
+Cabe ressaltar, que determinar a OTW ideal não é trivial e demanda testes experimentais para sua definição adequada. \citeonline{horvat2023} reconhecem que sua implementação da OTW trouxe ganhos modestos e sugerem que há espaço para aprimorar o cálculo dessa janela \cite{horvat2023}. Questões em aberto incluem como adaptar dinamicamente a janela à medida que novas partidas ocorrem (por exemplo, dar mais peso aos jogos mais recentes dentro da janela) e como proceder quando existem poucos confrontos diretos recentes entre dois times (caso em que poderia ser relevante ampliar a janela especificamente para incluir mais partidas entre eles) \cite{horvat2023}. Apesar desses detalhes em evolução, o conceito de OTW traz para a modelagem preditiva uma preocupação importante: a de que a pertinência dos dados de treino não é uniforme ao longo do tempo, e que estratégias que priorizam informações mais atualizadas tendem a melhorar a capacidade de previsão em domínios dinâmicos como o esporte.
+
+No contexto deste projeto, a utilização de uma OTW visa garantir que o modelo de previsão esteja sempre treinado com dados suficientemente recentes para refletir a performance atual das equipes, sem entretanto descartar tantos dados a ponto de perder significância estatística. Com base na literatura \cite{Horvat2020PhD,horvat2023}, espera-se que essa abordagem contribua para um modelo mais adaptado às condições vigentes em cada período da liga, complementando as demais técnicas empregadas.
+
+\begin{figure}[htb]
+    \centering
+    \caption{Ilustração das Janelas Temporais Ótimas (OTWs, em verde) e sua relação com os intervalos de tempo dos conjuntos de dados de treinamento (em azul claro), para N jogos do time observado.}
+   %%\ \includegraphics[width=0.7\textwidth]{figuras/1 temporada.png} 
+
+    \legend{Fonte: Adaptado \citeonline{horvat2023}}
+    \label{fig:otw-illustration}
+\end{figure}
+
+
+% -----------------------------------------------------------------------
+% 2.3 Técnicas de Machine Learning Aplicadas ao Esporte
+% -----------------------------------------------------------------------
+
+
+\section{Trabalhos Relacionados}
+
+Uma linha de pesquisa envolve \textit{ensembles} heterogêneos, combinando diferentes tipos de modelos preditivos. \citeauthor{Albert2021} integraram algoritmos de \textit{boosting} com redes neurais para prever a seleção de jogadores no All-Star Game da NBA, obtendo melhora de acurácia nas predições e acrescentando certa interpretabilidade por meio da análise das importâncias de atributos \cite{Albert2021}.
+
+Outra vertente destacada na literatura diz respeito ao horizonte temporal dos dados utilizados para treino de modelos. \citeauthor{horvat2023} propuseram restringir o conjunto de treinamento a uma “janela” temporal dinâmica, de modo a refletir apenas a forma recente das equipes e atenuar a influência de dados históricos possivelmente defasados \cite{horvat2023}. Esse conceito de \textit{Janela Temporal Ótima} (OTW) resultou em ganhos modestos de desempenho, por exemplo, ao considerar somente os jogos da temporada imediatamente anterior para treinar um modelo preditivo, obteve-se acurácia em torno de 78\% -- superior ao treinamento com múltiplas temporadas, que pode introduzir ruído \cite{horvat2023}.
+
+Também vêm ganhando espaço abordagens que integram predição e explicação. Métodos de interpretabilidade como o SHAP \cite{Lundberg2017} têm sido aplicados para tornar modelos de \textit{gradient boosting} menos opacos, embora seu uso específico em predição de partidas de basquete ainda seja incipiente. \citeauthor{ouyang2024}, por exemplo, combinaram um modelo XGBoost com a análise SHAP para identificar os fatores mais determinantes nos resultados de jogos da NBA, e relataram que métricas como aproveitamento de arremessos de quadra, rebotes defensivos e número de desperdícios de posse estão consistentemente entre as mais influentes para definir o vencedor de uma partida \cite{ouyang2024}.
+
+Contudo, uma crítica recorrente a muitos modelos preditivos é sua dependência excessiva de estatísticas agregadas por equipe, que podem mascarar a dinâmica interna do elenco. Como apontam \cite{wang2025}, modelos baseados apenas na força histórica da equipe possuem poder explicativo limitado, e a inclusão de dados sobre lesões melhora significativamente a acurácia. Essa vulnerabilidade é reforçada por \cite{articleWu}, que descreve a lesão de um jogador-chave como uma 'influência vital' capaz de reverter o resultado esperado mesmo entre equipes com grande disparidade de força. Além das lesões, modelos que utilizam dados agregados de time 'não conseguem levar em conta rapidamente as mudanças no elenco', como trocas e contratações, o que representa uma falha estrutural, especialmente no início de novas temporadas.
+
+Por fim, estudos recentes sugerem que a combinação de métricas individuais de jogadores com estatísticas coletivas de equipes eleva o poder preditivo dos modelos. O modelo híbrido \textit{MambaNet}, apresentado por \citeauthor{khanmohammadi2024}, exemplifica essa estratégia ao processar simultaneamente séries históricas de desempenho de times e de jogadores para estimar probabilidades de vitória e classificação aos playoffs \cite{khanmohammadi2024, mambanet2024}. Essa incorporação de dados em nível de jogador permitiu ao MambaNet superar abordagens baseadas apenas em estatísticas agregadas por equipe \cite{khanmohammadi2024}.
+
+
+
+
+% ========================================================================
+% DESENVOLVIMENTO
+% ========================================================================
+
+% ========================================================================
+% CAPÍTULO 3: DESENVOLVIMENTO E METODOLOGIA
+% ========================================================================
+\chapter{Desenvolvimento}
+    
+Literalmente ainda em desenvolvimento
+
+% ========================================================================
+% CAPÍTULO 4: TESTES E RESULTADOS
+% ========================================================================
+\chapter{Testes e Resultados}
+
+A ser escrito
+
+% ========================================================================
+% CAPÍTULO 5: CONCLUSAO
+% ========================================================================
+\chapter{Conclusão}
+
+Este trabalho apresentou a construção de um modelo de \textit{machine learning} para previsão de vencedores em jogos da NBA, utilizando o classificador CatBoost e um arcabouço de engenharia de \textit{features} que integra estatísticas contextuais de equipes e agregações em nível de elenco de jogadores. A validação adotou particionamento temporal, de modo a preservar a causalidade e simular um cenário de predição prospectivo.
+
+No conjunto de teste com 783 jogos, compreendendo o período de 28/12/2024 a 25/10/2025, o modelo alcançou acurácia de 65{,}64\% e AUC-ROC de 0{,}7036, superando uma linha de base de 53{,}77\% em 11{,}88 pontos percentuais. Considerando a incerteza amostral, a acurácia apresenta intervalo de confiança aproximado de 95\% entre 62{,}24\% e 68{,}88\%, indicando ganho preditivo estatisticamente consistente sobre o acaso e sobre a predição trivial do mandante.
+
+Quando confrontados com a literatura, os resultados são competitivos, embora aquém dos melhores cenários reportados. \citeonline{horvat2023} relatam acurácia média em torno de 66\% e picos próximos de 78\% com janelas temporais ótimas e ajuste cuidadoso do horizonte informacional. Já \citeonline{khanmohammadi2024} priorizam AUC como métrica, obtendo valores entre 0{,}72 e 0{,}82 em diferentes temporadas, o que contextualiza nosso AUC de 0{,}7036 como limítrofe ao intervalo inferior daquele estudo. Como síntese de revisões anteriores, \citeonline{lunelli2019} registram SVMs com acurácia anual entre 67{,}2\% e 73{,}5\% para 2003--2012, com desempenho mais alto em vitórias do mandante e em jogos decididos por margens amplas. Diferenças metodológicas ajudam a explicar as discrepâncias, incluindo escolhas de janelas e de validação, variáveis explicativas empregadas, horizonte temporal e, em diversos trabalhos.
+
+A análise por equipe evidenciou heterogeneidade relevante. O modelo performou muito bem em equipes de menor volatilidade de elenco e perfil tático mais estável, como o Oklahoma City Thunder, com 80{,}65\% de acerto em 62 jogos, e o Utah Jazz, com 75{,}47\%. Em contrapartida, houve quedas para casos mais erráticos, como Indiana Pacers, com 53{,}40\%, e San Antonio Spurs, com 55{,}00\%. Esse comportamento sugere sensibilidade a mudanças abruptas de rotação, lesões e ajustes táticos, o que é coerente com a hipótese de que \textit{features} agregadas de jogadores, ainda que valiosas, podem perder poder explicativo quando a composição efetiva em quadra varia intensamente entre jogos.
+
+No plano das contribuições, mostraram-se úteis: i) a incorporação de estatísticas agregadas de jogadores em nível de elenco, que figuraram entre as variáveis mais importantes, e ii) a validação temporal, que reduz \textit{leakage} e aproxima o processo ao uso real. Ainda assim, a acurácia de 65{,}64\% pode ser considerada moderada para aplicações operacionais sensíveis a erro, especialmente quando comparada a cenários de estado da arte com janelas otimizadas ou sinais exógenos. Em contrapartida, o AUC de 0{,}7036 indica capacidade ordenadora razoável, isto é, o modelo tende a atribuir probabilidades mais altas aos vencedores do que aos perdedores com frequência superior ao acaso, o que é útil em decisões baseadas em \textit{ranking} de confiança.
+
+Em síntese, o modelo proposto é metodologicamente sólido, reproduz relações reconhecidas no domínio e apresenta ganhos significativos sobre linhas de base simples, com destaque para a utilidade das \textit{features} derivadas de jogadores. O desempenho, embora competitivo, permanece abaixo de alguns referenciais de literatura em cenários específicos, o que direciona um roteiro claro de aprimoramento. A combinação de janelas adaptativas otimizadas, melhores sinais de disponibilidade e possíveis variáveis exógenas tem potencial de elevar a acurácia e o AUC a patamares mais próximos do estado da arte, preservando rigor de validação e interpretabilidade.
+
+
+\subsection*{Trabalhos Futuros}
+
+Por conta de limitações impostas no projeto para poder ser desenvolvido no tempo proposto, e comportamentos da solução durante testes, há algumas sugestões de melhorias e adições que podem ser úteis em trabalhos futuros:
+\begin{itemize}
+    \item Otimização sistemática das janelas temporais por equipe e por fase da temporada, à luz de \citeonline{horvat2023}.
+    \item Enriquecimento de dados com indicadores de disponibilidade e carga de trabalho de jogadores, bem como métricas de força do elenco e \textit{matchups}.
+    \item Avaliação do uso controlado de \textit{odds} como variável explicativa, com testes de robustez para evitar sobreajuste a mercado.
+    \item Calibração probabilística e ajuste de limiar baseados em função-objetivo prática, incluindo \textit{Brier score} e curvas de ganho.
+    \item Estratégias de \textit{ensembling} e modelos hierárquicos que acomodem heterogeneidade entre equipes.
+    \item Análise de subgrupos por margem de vitória e contexto, conforme indícios de sensibilidade observados na literatura \citeonline{lunelli2019}.
+\end{itemize}
+
+
+\postextual
+\bibliographystyle{abntex2-alf}
+\bibliography{bibliografia}
+\end{document}
