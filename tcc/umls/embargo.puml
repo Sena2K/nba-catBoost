@@ -1,0 +1,19 @@
+@startuml
+title Embargo na validação cruzada temporal
+
+start
+:Ordenar o conjunto de partidas por data;
+:Identificar dias únicos;
+repeat
+  :Definir Janela de Teste [T .. T+k];
+  :Definir Embargo: intervalo de 24h imediatamente\nanterior a T (T−1 dia);
+  :Conjunto de Treino = dados com data < (T − 24h);
+  :Conjunto de Validação = dados em [T .. T+k];
+  :Treinar o modelo e registrar métricas da dobra;
+repeat while (existem dobras restantes?)
+stop
+
+legend right
+O embargo evita que registros muito próximos a T\n(entorno de T−1 dia) vazem do treino para a validação.
+end legend
+@enduml

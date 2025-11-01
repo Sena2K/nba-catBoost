@@ -41,6 +41,12 @@
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage[top=3cm, bottom=2cm, left=3cm, right=2cm]{geometry}
+% Tabularx and ragged2e are required for wide tables using X columns
+\usepackage{tabularx}
+\usepackage{ragged2e}
+
+% Define \textus used in the document (formatting for parameter names/code-like text)
+\newcommand{\textus}[1]{\texttt{#1}}
 
 % ---
 % Pacotes de citações
@@ -208,9 +214,6 @@ Os objetivos deste trabalho estão divididos em objetivo geral, que se propõe a
 
 \subsection{Objetivo}
 
-Este trabalho tem como objetivo propor um modelo computacional para a previsão de resultados e apoio à decisão em jogos da NBA, com base em aprendizado de máquina e análise estatística avançada.
-
-\subsection{Objetivo Principal}
 O estudo aqui descrito pretende desenvolver um modelo baseado no algoritmo de gradient boosting (CatBoost), visando propor um método nele baseado, para a previsão de resultados de partidas da NBA. Neste caso, a própria forma recente das equipes e as estatísticas avançadas dos jogadores são utilizadas para verificar a probabilidade de vitória de cada time.
 
 A abordagem proposta busca definir de maneira mais fiel o momento (ou "forma") atual de uma equipe, utilizando janelas temporais adaptativas e pesos dinâmicas, permitindo assim descobrir com mais precisão os padrões que levam à vitória.
@@ -267,140 +270,6 @@ No aprendizado supervisionado, o algoritmo recebe um conjunto de exemplos de tre
 Esses algoritmos ajustam seus parâmetros internos para minimizar um erro de previsão em relação aos rótulos conhecidos do conjunto de treino. Quando bem-sucedido, o modelo resultante consegue generalizar o aprendizado para realizar previsões acuradas em novos dados \cite{mitchell1997}. Nos últimos anos, métodos de aprendizado profundo (\textit{deep learning}, redes neurais com muitas camadas) tornaram-se proeminentes dentro do paradigma supervisionado, alcançando avanços significativos em tarefas como reconhecimento de imagens e jogos estratégicos \cite{goodfellow2016}.
  Embora redes profundas exijam grandes volumes de dados e poder computacional, elas demonstram o potencial do aprendizado supervisionado quando as condições de treinamento são favoráveis \cite{goodfellow2016}.
 
-\subsection{Métricas de Avaliação}
-A avaliação de modelos preditivos não deve se resumir a um único indicador. Neste trabalho, consideram-se três dimensões complementares: desempenho, discriminação e calibração. Desempenho mede o quanto o modelo acerta as classes. Discriminação avalia se o modelo consegue ordenar corretamente vencedores e perdedores ao atribuir probabilidades. Calibração verifica se as probabilidades previstas estão próximas das frequências observadas (por exemplo, \textit{Brier score} e curvas de calibração). Uma análise completa deve integrar essas três dimensões, ignorar qualquer uma delas pode levar a conclusões incompletas ou enganosas sobre a qualidade real do modelo \cite{jiang2020, giskard_calibration}
-
-\subsubsection{Métricas de Desempenho de Classificação}
-\subsubsection{A Matriz de Confusão}
-A Matriz de Confusão, também conhecida como matriz de erro, é uma tabela $N \times N$ que serve como base para a visualização e cálculo da performance de um classificador \cite{baheti_classification_metrics}. Para o problema binário de prever o resultado de um jogo da NBA (e.g., a equipe da casa vence), a matriz 2x2 compara os valores previstos pelo modelo com os valores reais \textit{(ground truth)} \cite{ibm_confusion_matrix}. A sua estrutura permite uma análise detalhada dos tipos de erros cometidos, fornecendo uma visão muito mais granular do que uma única métrica agregada pode oferecer.
-Os seus componentes fundamentais são:
-\begin{itemize}
-    \item Verdadeiros Positivos \textit{(TP - True Positives)}: O modelo prevê corretamente que a equipe da casa vence, e a equipe da casa de facto vence.
-    \item Verdadeiros Negativos \textit{(TN - True Negatives)}: O modelo prevê corretamente que a equipe da casa perde (ou seja, a equipe visitante vence), e a equipe da casa de facto perde.
-    \item Falsos Positivos \textit{(FP - False Positives)}: O modelo prevê que a equipe da casa vence, mas na realidade ela perde. Este erro é também conhecido como Erro Tipo I \cite{baheti_classification_metrics}. 
-    \item Falsos Negativos \textit{(FN - False Negatives)}: O modelo prevê que a equipe da casa perde, mas na realidade ela vence. Este erro é também conhecido como Erro Tipo II \cite{baheti_classification_metrics}.
-\end{itemize}
-Ao decompor as previsões nestas quatro categorias, a matriz de confusão revela não apenas quantos erros o modelo comete, mas também de que forma ele erra, o que é fundamental para o diagnóstico e aprimoramento do modelo \cite{ibm_confusion_matrix}.
-\subsubsection{Acurácia}
-A acurácia é a métrica mais comum e intuitiva para avaliar modelos de classificação. É calculada como a proporção de previsões corretas (TP e TN) sobre o número total de previsões realizadas\cite{coursera_confusion_matrix}. A sua fórmula é:
-
-\[
-\text{Acurácia} = \frac{TP + TN}{TP + TN + FP + FN}
-\]
-
-Apesar de sua simplicidade, a acurácia pode ser enganosa em bases com classes desbalanceadas, algo comum no esporte. Na NBA, partidas entre um líder de conferência e o lanterna ilustram esse desequilíbrio. Métricas globais como a acurácia tendem a favorecer a classe majoritária e podem ocultar a incapacidade do modelo de reconhecer casos raros. Em um cenário em que o mandante tem 90\% de probabilidade de vitória, um classificador que sempre prevê vitória do mandante atinge 90\% de acerto sem, de fato, aprender padrões úteis. 
-
-Para a previsão de jogos da NBA, em que o objetivo é superar o conhecimento comum e as linhas de aposta, a acurácia isolada torna-se uma métrica de vaidade. Recomenda-se priorizar métricas mais avançadas ao desbalanceamento e a custos assimétricos de erro, como AUC-ROC, AUC-PR, F1, \textit{balanced accuracy}, além de medidas de calibração como \textit{Brier score} e curvas de calibração \cite{lopez}.
-
-\subsubsection{Precisão e Recall}
-Para superar as limitações da acurácia, a precisão e o recall oferecem uma avaliação mais focada na performance do modelo em relação à classe positiva.
-
-Precisão \textit{(Positive Predictive Value - PPV)} mede a proporção de previsões positivas que estavam de facto corretas. Responde à pergunta: "Das vezes que o modelo previu uma vitória da equipe da casa, quantas vezes acertou?" \cite{fawcett2006roc}. A sua fórmula é:
-
-$\text{Precisão} = \frac{TP}{TP + FP}$
-
-Recall (Sensibilidade ou Taxa de Verdadeiros Positivos - TPR) mede a proporção de positivos reais que foram corretamente identificados pelo modelo. Responde à pergunta: "De todas as vitórias reais da equipe da casa, quantas é que o modelo conseguiu prever?"\cite{fawcett2006roc}. A sua fórmula é: 
-
-$\text{Recall} = \frac{TP}{TP + FN}$
-
-Entre estas duas métricas existe um trade-off fundamental: otimizar uma geralmente leva à degradação da outra  \cite{ibm_confusion_matrix}. Um modelo que prevê "upsets" de forma muito liberal (com base em pouca evidência) terá um recall elevado (captura a maioria dos "upsets" reais), mas uma precisão baixa (muitos falsos alarmes). Por outro lado, um modelo conservador que só prevê um "upset" com evidência muito forte terá alta precisão, mas baixo recall \cite{fawcett2006roc}.
-
-A decisão de priorizar precisão ou recall não é puramente técnica, mas sim uma decisão estratégica que depende do objetivo do utilizador final.   
- %% pensando se eu coloco a explicação aqui eu vai ficar coisa demais
-
-\subsubsection{F1-Score}
-
-O F1-Score combina a precisão e o recall numa única métrica, calculada como a sua média harmónica \cite{ibm_confusion_matrix}.
-
-$$\text{F1-Score} = 2 \times \frac{\text{Precisão} \times \text{Recall}}{\text{Precisão} + \text{Recall}}$$
-
-
-Esta métrica foi concebida para fornecer uma medida de performance equilibrada, sendo particularmente útil quando as classes são desbalanceadas e quando a importância de FPs e FNs é semelhante. Ao contrário da média aritmética, a média harmónica penaliza fortemente valores extremos. Isto significa que um F1-Score elevado só é alcançado quando tanto a precisão como o recall são elevados, tornando-o um indicador mais sólido da performance geral do que a acurácia em cenários não ideais \cite{ibm_confusion_matrix}.
-
-\begin{table}[htbp]
-\caption{Resumo das Métricas de Desempenho de Classificação}
-\label{tab:metricas-classificacao}
-\centering
-\footnotesize
-\setlength{\tabcolsep}{6pt}
-\renewcommand{\arraystretch}{1.25}
-\newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
-\begin{tabularx}{\textwidth}{|l|c|L|L|L|}
-\hline
-\textbf{Métrica} & \textbf{Fórmula} & \textbf{Pergunta respondida} & \textbf{Vantagens} & \textbf{Limitações e contexto na NBA} \\
-\hline
-Acurácia &
-$\dfrac{\mathrm{TP}+\mathrm{TN}}{\mathrm{TP}+\mathrm{TN}+\mathrm{FP}+\mathrm{FN}}$ &
-Proporção de previsões corretas no total. &
-Simples e intuitiva. &
-Pode ser enganosa em jogos desiguais e mascarar a incapacidade de prever \textit{upsets}. \\
-\hline
-Precisão &
-$\dfrac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}}$ &
-Das previsões de vitória, quantas estavam corretas. &
-Mede a confiabilidade das previsões positivas. &
-Ignora falsos negativos; importante para manter credibilidade. \\
-\hline
-Recall &
-$\dfrac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}}$ &
-De todas as vitórias reais, quantas foram previstas. &
-Mede a capacidade de detectar eventos positivos. &
-Ignora falsos positivos; pode levar à perda de oportunidades de valor. \\
-\hline
-F1-Score &
-$2 \times \dfrac{P \times R}{P + R}$ &
-Equilíbrio entre precisão e recall. &
-Robusto ao desbalanceamento de classes. &
-Menos interpretável do que precisão e recall isoladamente. \\
-\hline
-\end{tabularx}
-
-\vspace{2mm}
-\footnotesize
-$TP$ = verdadeiros positivos; $TN$ = verdadeiros negativos; $FP$ = falsos positivos; $FN$ = falsos negativos; $P$ = precisão; $R$ = recall.\\
-Fonte: elaboração própria.
-\end{table}
-
-
-\subsubsection{Métricas de Discriminação}
-Enquanto as métricas de desempenho avaliam o resultado final da classificação, as métricas de discriminação avaliam a capacidade intrínseca do modelo de separar as duas classes (vitória vs. derrota), independentemente de um limiar de classificação específico.
-
-
-\subsubsection{Curva ROC}
-As métricas da seção anterior dependem de um limiar de decisão para converter scores contínuos em classificações discretas. No entanto, este limiar é arbitrário e raramente é o ideal.1 A análise de discriminação avalia a qualidade dos scores do modelo em toda a gama de limiares possíveis \cite{fawcett2006roc}.
-
-$$\text{FPR} = \frac{FP}{FP + TN} $$\
-
-A curva é gerada ao variar continuamente o limiar de decisão de 1 (mais restritivo) a 0 (mais permissivo). Para cada limiar, um novo par (FPR, TPR) é calculado e plotado, formando a curva \cite{fawcett2006roc}.
-
-
-\begin{itemize}
-  \item Linha diagonal ($y=x$): representa um classificador aleatório, sem poder preditivo. Um modelo útil deve ter a curva acima dessa linha \cite{fawcett2006roc}.
-  \item Canto superior esquerdo $(0,1)$: representa o classificador perfeito, com $\mathrm{TPR}=1$ e $\mathrm{FPR}=0$ \cite{fawcett2006roc}.
-  \item Posição na curva: pontos no canto inferior esquerdo indicam comportamento conservador (baixo $\mathrm{FPR}$ e também baixo $\mathrm{TPR}$), enquanto pontos no canto superior direito indicam comportamento liberal (alto $\mathrm{TPR}$ e também alto $\mathrm{FPR}$). O gráfico torna explícito o \textit{trade-off} entre o benefício de detectar positivos e o custo de alarmes falsos \cite{fawcett2006roc}.
-\end{itemize}
-
-\subsubsection{Área Sob a Curva (AUC)}
-
-A Área Sob a Curva (AUC) é uma métrica escalar que resume a curva ROC num único número, representando a área geométrica sob a curva. O seu valor varia entre 0.5 (para um classificador aleatório) e 1.0 (para um classificador perfeito) \cite{fawcett2006roc}.
-
-A AUC possui uma interpretação estatística particularmente intuitiva e poderosa: é a probabilidade de que o modelo atribua uma pontuação de previsão mais alta a uma instância positiva (uma vitória real) escolhida aleatoriamente do que a uma instância negativa (uma derrota real) escolhida aleatoriamente.
-
-Esta interpretação revela uma propriedade fundamental da AUC: ela mede a qualidade do "ranking" interno do modelo, independentemente dos valores absolutos das probabilidades. Um modelo que atribui uma probabilidade de 0.1 a todas as derrotas e 0.2 a todas as vitórias terá uma AUC perfeita de 1.0, pois consegue separar perfeitamente as classes, embora as probabilidades em si não sejam realistas. A AUC mede, portanto, a capacidade de discriminação ou separação do modelo. Um valor de AUC elevado indica que o modelo aprendeu padrões que distinguem fundamentalmente as vitórias das derrotas. É uma medida robusta da qualidade do "motor" preditivo do modelo, independente de como as suas saídas são calibradas ou de qual limiar de decisão é escolhido, tornando-a uma das métricas mais importantes para comparar o poder preditivo fundamental de diferentes modelos \cite{fawcett2006roc}.
-
-
-\subsubsection{Métricas de Calibração}
-
-A calibração avalia se as probabilidades previstas por um modelo correspondem às frequências reais dos eventos \cite{guo2017calibration}. Um modelo bem calibrado é aquele cujas previsões podem ser interpretadas como probabilidades confiáveis: para todos os casos aos quais o modelo atribui, por exemplo, 80\% de probabilidade de ocorrência, espera-se que o evento realmente ocorra em cerca de 80\% das vezes. É importante ressalta r que um modelo pode apresentar excelente discriminação isto é, elevada capacidade de distinguir entre classes, refletida por uma alta área sob a curva ROC (AUC) e ainda assim ser mal calibrado \cite{wang2025calibration}.
-
-A má calibração é um problema recorrente em redes neurais modernas e em outros modelos complexos, que tendem a produzir previsões excessivamente confiantes (\textit{overconfident}) em relação à probabilidade real dos eventos \cite{guo2017calibration}.
-
-Para uma avaliação quantitativa, o Brier Score é uma das métricas mais utilizadas \cite{renooij2004uncertaintruth}. Proposto originalmente para a verificação de previsões meteorológicas, ele mede o erro quadrático médio entre as probabilidades previstas ($p_i$) e os resultados reais ($o_i$, codificados como 1 para ocorrência e 0 para não ocorrência). Para previsões binárias, a fórmula é:
-
-$$\text{Brier Score} = \frac{1}{N} \sum_{i=1}^{N} (p_i - o_i)^2$$
-
-O Brier Score é uma proper scoring rule, o que significa que o valor mínimo esperado da métrica é alcançado apenas quando o modelo prevê as verdadeiras probabilidades. Seus valores variam de 0 a 1, onde um score mais baixo indica melhor calibração e acurácia das probabilidades. Ele combina, em uma única medida, tanto a calibração quanto a resolução (a capacidade do modelo de emitir previsões "afiadas", ou seja, próximas de 0 ou 1), tornando-se uma medida abrangente da qualidade da previsão probabilística \cite{renooij2004uncertaintruth}. 
-
 \subsection{Aprendizado de Máquina}
 
 O Aprendizado de Máquina (ML), uma das principais subáreas da IA, desenvolve algoritmos que permitem ao computador aprender padrões ou comportamentos a partir de dados e melhorar seu desempenho em tarefas específicas. Uma definição clássica descreve que um algoritmo de ML explora dados de treinamento para induzir um modelo capaz de fazer predições ou decisões sem ser explicitamente programado para cada caso \cite{mitchell1997}.
@@ -409,11 +278,11 @@ Os métodos de ML costumam ser categorizados em aprendizado supervisionado, não
 
 %%Realmente, acho que vai ter importância explicar o ensamble 
 
-A técnica de \textit{boosting}, introduzida por Freund e Schapire\cite{Freund1997} e posteriormente generalizada por Friedman\cite{Friedman2001}, combina múltiplos modelos fracos de forma sequencial para formar um modelo final mais robusto. Implementações modernas, como o XGBoost\cite{Chen2016} e o CatBoost\cite{Prokhorenkova2018}, incorporam diversas otimizações e obtêm desempenho de ponta em muitos cenários de classificação e regressão.
+A técnica de \textit{boosting}, introduzida por Freund e Schapire\cite{Freund1997} e posteriormente generalizada por Friedman\cite{Friedman2001}, combina múltiplos modelos fracos de forma sequencial para formar um modelo final mais sólido. Implementações modernas, como o XGBoost\cite{Chen2016} e o CatBoost\cite{Prokhorenkova2018}, incorporam diversas otimizações e obtêm desempenho de ponta em muitos cenários de classificação e regressão.
 
 %%Aqui eu acho que esse último paragráfo é melhor que o primeiro paragráfo dos algoritmos de boosting
 
-\subsubsection{Algoritmos de Boosting}\label{subsec:boosting-geral} O boosting é uma técnica de aprendizado de máquina que combina vários modelos simples (``fracos'') de forma sequencial para formar um modelo final mais forte e preciso\cite{AWSBoosting}. 
+\subsection{Algoritmos de Boosting}\label{subsec:boosting-geral} O boosting é uma técnica de aprendizado de máquina que combina vários modelos simples (``fracos'') de forma sequencial para formar um modelo final mais forte e preciso\cite{AWSBoosting}. 
 
 Em cada iteração do processo de boosting, um novo modelo é treinado para corrigir os erros do conjunto de modelos anteriores, focando especialmente nas instâncias que foram preditas incorretamente nas etapas precedentes. Diferentemente do \emph{bagging} (onde modelos são treinados em paralelo em subconjuntos aleatórios dos dados), no boosting os modelos são ajustados em sequência adaptativa, de modo que cada modelo adicional concentra-se nos erros do anterior. Essa estratégia iterativa tende a reduzir o viés do modelo e, quando bem regulamentada, produz modelos de alta acurácia em tarefas de classificação e regressão\cite{AWSBoosting}. Um dos primeiros e mais influentes algoritmos dessa família é o AdaBoost (\emph{Adaptive Boosting}), proposto por Freund e Schapire na década de 1990 \cite{Freund1997}.
 
@@ -497,6 +366,145 @@ Além disso, o CatBoost adota árvores de decisão simétricas (também chamadas
 \end{figure}
 
 
+
+\subsection{Métricas de Avaliação}
+A avaliação de modelos preditivos não deve se resumir a um único indicador. Neste trabalho, consideram-se três dimensões complementares: desempenho, discriminação e calibração. Desempenho mede o quanto o modelo acerta as classes. Discriminação avalia se o modelo consegue ordenar corretamente vencedores e perdedores ao atribuir probabilidades. Calibração verifica se as probabilidades previstas estão próximas das frequências observadas (por exemplo, \textit{Brier score} e curvas de calibração). Uma análise completa deve integrar essas três dimensões, ignorar qualquer uma delas pode levar a conclusões incompletas ou enganosas sobre a qualidade real do modelo \cite{jiang2020, giskard_calibration}
+
+\subsubsection{Métricas de Desempenho de Classificação}
+As métricas de desempenho de classificação são utilizadas para avaliar a eficácia do modelo em acertar a classe correta, medindo diretamente a frequência e o tipo de erros cometidos nas previsões finais.
+
+\subsubsection{A Matriz de Confusão}
+A Matriz de Confusão, também conhecida como matriz de erro, é uma tabela $N \times N$ que serve como base para a visualização e cálculo da performance de um classificador \cite{baheti_classification_metrics}. Para o problema binário de prever o resultado de um jogo da NBA (e.g., a equipe da casa vence), a matriz 2x2 compara os valores previstos pelo modelo com os valores reais \textit{(ground truth)} \cite{ibm_confusion_matrix}. A sua estrutura permite uma análise detalhada dos tipos de erros cometidos, fornecendo uma visão muito mais granular do que uma única métrica agregada pode oferecer.
+Os seus componentes fundamentais são:
+\begin{itemize}
+    \item Verdadeiros Positivos \textit{(TP - True Positives)}: O modelo prevê corretamente que a equipe da casa vence, e a equipe da casa de facto vence.
+    \item Verdadeiros Negativos \textit{(TN - True Negatives)}: O modelo prevê corretamente que a equipe da casa perde (ou seja, a equipe visitante vence), e a equipe da casa de facto perde.
+    \item Falsos Positivos \textit{(FP - False Positives)}: O modelo prevê que a equipe da casa vence, mas na realidade ela perde. Este erro é também conhecido como Erro Tipo I \cite{baheti_classification_metrics}. 
+    \item Falsos Negativos \textit{(FN - False Negatives)}: O modelo prevê que a equipe da casa perde, mas na realidade ela vence. Este erro é também conhecido como Erro Tipo II \cite{baheti_classification_metrics}.
+\end{itemize}
+Ao decompor as previsões nestas quatro categorias, a matriz de confusão revela não apenas quantos erros o modelo comete, mas também de que forma ele erra, o que é fundamental para o diagnóstico e aprimoramento do modelo \cite{ibm_confusion_matrix}.
+\subsubsection{Acurácia}
+A acurácia é a métrica mais comum e intuitiva para avaliar modelos de classificação. É calculada como a proporção de previsões corretas (TP e TN) sobre o número total de previsões realizadas\cite{coursera_confusion_matrix}. A sua fórmula é:
+
+\[
+\text{Acurácia} = \frac{TP + TN}{TP + TN + FP + FN}
+\]
+
+Apesar de sua simplicidade, a acurácia pode ser enganosa em bases com classes desbalanceadas, algo comum no esporte. Na NBA, partidas entre um líder de conferência e o lanterna ilustram esse desequilíbrio. Métricas globais como a acurácia tendem a favorecer a classe majoritária e podem ocultar a incapacidade do modelo de reconhecer casos raros. Em um cenário em que o mandante tem 90\% de probabilidade de vitória, um classificador que sempre prevê vitória do mandante atinge 90\% de acerto sem, de fato, aprender padrões úteis. 
+
+Para a previsão de jogos da NBA, em que o objetivo é superar o conhecimento comum e as linhas de aposta, a acurácia isolada torna-se uma métrica de vaidade. Recomenda-se priorizar métricas mais avançadas ao desbalanceamento e a custos assimétricos de erro, como AUC-ROC, AUC-PR, F1, \textit{balanced accuracy}, além de medidas de calibração como \textit{Brier score} e curvas de calibração \cite{lopez}.
+
+\subsubsection{Precisão e Recall}
+Para superar as limitações da acurácia, a precisão e o recall oferecem uma avaliação mais focada na performance do modelo em relação à classe positiva.
+
+Precisão \textit{(Positive Predictive Value - PPV)} mede a proporção de previsões positivas que estavam de facto corretas. Responde à pergunta: "Das vezes que o modelo previu uma vitória da equipe da casa, quantas vezes acertou?" \cite{fawcett2006roc}. A sua fórmula é:
+
+$\text{Precisão} = \frac{TP}{TP + FP}$
+
+Recall (Sensibilidade ou Taxa de Verdadeiros Positivos - TPR) mede a proporção de positivos reais que foram corretamente identificados pelo modelo. Responde à pergunta: "De todas as vitórias reais da equipe da casa, quantas é que o modelo conseguiu prever?"\cite{fawcett2006roc}. A sua fórmula é: 
+
+$\text{Recall} = \frac{TP}{TP + FN}$
+
+Entre estas duas métricas existe um trade-off fundamental: otimizar uma geralmente leva à degradação da outra  \cite{ibm_confusion_matrix}. Um modelo que prevê "upsets" de forma muito liberal (com base em pouca evidência) terá um recall elevado (captura a maioria dos "upsets" reais), mas uma precisão baixa (muitos falsos alarmes). Por outro lado, um modelo conservador que só prevê um "upset" com evidência muito forte terá alta precisão, mas baixo recall \cite{fawcett2006roc}.
+
+A decisão de priorizar precisão ou recall não é puramente técnica, mas sim uma decisão estratégica que depende do objetivo do utilizador final.   
+ %% pensando se eu coloco a explicação aqui eu vai ficar coisa demais
+
+\subsubsection{F1-Score}
+
+O F1-Score combina a precisão e o recall numa única métrica, calculada como a sua média harmónica \cite{ibm_confusion_matrix}.
+
+$$\text{F1-Score} = 2 \times \frac{\text{Precisão} \times \text{Recall}}{\text{Precisão} + \text{Recall}}$$
+
+
+Esta métrica foi concebida para fornecer uma medida de performance equilibrada, sendo particularmente útil quando as classes são desbalanceadas e quando a importância de FPs e FNs é semelhante. Ao contrário da média aritmética, a média harmónica penaliza fortemente valores extremos. Isto significa que um F1-Score elevado só é alcançado quando tanto a precisão como o recall são elevados, tornando-o um indicador mais sólido da performance geral do que a acurácia em cenários não ideais \cite{ibm_confusion_matrix}.
+
+\begin{table}[htbp]
+\caption{Resumo das Métricas de Desempenho de Classificação}
+\label{tab:metricas-classificacao}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.25}
+\newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
+\begin{tabularx}{\textwidth}{|l|c|L|L|L|}
+\hline
+\textbf{Métrica} & \textbf{Fórmula} & \textbf{Pergunta respondida} & \textbf{Vantagens} & \textbf{Limitações e contexto na NBA} \\
+\hline
+Acurácia &
+$\dfrac{\mathrm{TP}+\mathrm{TN}}{\mathrm{TP}+\mathrm{TN}+\mathrm{FP}+\mathrm{FN}}$ &
+Proporção de previsões corretas no total. &
+Simples e intuitiva. &
+Pode ser enganosa em jogos desiguais e mascarar a incapacidade de prever \textit{upsets}. \\
+\hline
+Precisão &
+$\dfrac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}}$ &
+Das previsões de vitória, quantas estavam corretas. &
+Mede a confiabilidade das previsões positivas. &
+Ignora falsos negativos; importante para manter credibilidade. \\
+\hline
+Recall &
+$\dfrac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}}$ &
+De todas as vitórias reais, quantas foram previstas. &
+Mede a capacidade de detectar eventos positivos. &
+Ignora falsos positivos; pode levar à perda de oportunidades de valor. \\
+\hline
+F1-Score &
+$2 \times \dfrac{P \times R}{P + R}$ &
+Equilíbrio entre precisão e recall. &
+Forte ao desbalanceamento de classes. &
+Menos interpretável do que precisão e recall isoladamente. \\
+\hline
+\end{tabularx}
+
+\vspace{2mm}
+\footnotesize
+$TP$ = verdadeiros positivos; $TN$ = verdadeiros negativos; $FP$ = falsos positivos; $FN$ = falsos negativos; $P$ = precisão; $R$ = recall.\\
+Fonte: elaboração própria.
+\end{table}
+
+
+\subsubsection{Métricas de Discriminação}
+Enquanto as métricas de desempenho avaliam o resultado final da classificação, as métricas de discriminação avaliam a capacidade intrínseca do modelo de separar as duas classes (vitória vs. derrota), independentemente de um limiar de classificação específico.
+
+
+\subsubsection{Curva ROC}
+As métricas da seção anterior dependem de um limiar de decisão para converter scores contínuos em classificações discretas. No entanto, este limiar é arbitrário e raramente é o ideal.1 A análise de discriminação avalia a qualidade dos scores do modelo em toda a gama de limiares possíveis \cite{fawcett2006roc}.
+
+$$\text{FPR} = \frac{FP}{FP + TN} $$\
+
+A curva é gerada ao variar continuamente o limiar de decisão de 1 (mais restritivo) a 0 (mais permissivo). Para cada limiar, um novo par (FPR, TPR) é calculado e plotado, formando a curva \cite{fawcett2006roc}.
+
+
+\begin{itemize}
+  \item Linha diagonal ($y=x$): representa um classificador aleatório, sem poder preditivo. Um modelo útil deve ter a curva acima dessa linha \cite{fawcett2006roc}.
+  \item Canto superior esquerdo $(0,1)$: representa o classificador perfeito, com $\mathrm{TPR}=1$ e $\mathrm{FPR}=0$ \cite{fawcett2006roc}.
+  \item Posição na curva: pontos no canto inferior esquerdo indicam comportamento conservador (baixo $\mathrm{FPR}$ e também baixo $\mathrm{TPR}$), enquanto pontos no canto superior direito indicam comportamento liberal (alto $\mathrm{TPR}$ e também alto $\mathrm{FPR}$). O gráfico torna explícito o \textit{trade-off} entre o benefício de detectar positivos e o custo de alarmes falsos \cite{fawcett2006roc}.
+\end{itemize}
+
+\subsubsection{Área Sob a Curva (AUC)}
+
+A Área Sob a Curva (AUC) é uma métrica escalar que resume a curva ROC num único número, representando a área geométrica sob a curva. O seu valor varia entre 0.5 (para um classificador aleatório) e 1.0 (para um classificador perfeito) \cite{fawcett2006roc}.
+
+A AUC possui uma interpretação estatística particularmente intuitiva e poderosa: é a probabilidade de que o modelo atribua uma pontuação de previsão mais alta a uma instância positiva (uma vitória real) escolhida aleatoriamente do que a uma instância negativa (uma derrota real) escolhida aleatoriamente.
+
+Esta interpretação revela uma propriedade fundamental da AUC: ela mede a qualidade do "ranking" interno do modelo, independentemente dos valores absolutos das probabilidades. Um modelo que atribui uma probabilidade de 0.1 a todas as derrotas e 0.2 a todas as vitórias terá uma AUC perfeita de 1.0, pois consegue separar perfeitamente as classes, embora as probabilidades em si não sejam realistas. A AUC mede, portanto, a capacidade de discriminação ou separação do modelo. Um valor de AUC elevado indica que o modelo aprendeu padrões que distinguem fundamentalmente as vitórias das derrotas. É uma medida robusta da qualidade do "motor" preditivo do modelo, independente de como as suas saídas são calibradas ou de qual limiar de decisão é escolhido, tornando-a uma das métricas mais importantes para comparar o poder preditivo fundamental de diferentes modelos \cite{fawcett2006roc}.
+
+
+\subsubsection{Métricas de Calibração}
+
+A calibração avalia se as probabilidades previstas por um modelo correspondem às frequências reais dos eventos \cite{guo2017calibration}. Um modelo bem calibrado é aquele cujas previsões podem ser interpretadas como probabilidades confiáveis: para todos os casos aos quais o modelo atribui, por exemplo, 80\% de probabilidade de ocorrência, espera-se que o evento realmente ocorra em cerca de 80\% das vezes. É importante ressalta r que um modelo pode apresentar excelente discriminação isto é, elevada capacidade de distinguir entre classes, refletida por uma alta área sob a curva ROC (AUC) e ainda assim ser mal calibrado \cite{wang2025calibration}.
+
+A má calibração é um problema recorrente em redes neurais modernas e em outros modelos complexos, que tendem a produzir previsões excessivamente confiantes (\textit{overconfident}) em relação à probabilidade real dos eventos \cite{guo2017calibration}.
+
+Para uma avaliação quantitativa, o Brier Score é uma das métricas mais utilizadas \cite{renooij2004uncertaintruth}. Proposto originalmente para a verificação de previsões meteorológicas, ele mede o erro quadrático médio entre as probabilidades previstas ($p_i$) e os resultados reais ($o_i$, codificados como 1 para ocorrência e 0 para não ocorrência). Para previsões binárias, a fórmula é:
+
+$$\text{Brier Score} = \frac{1}{N} \sum_{i=1}^{N} (p_i - o_i)^2$$
+
+O Brier Score é uma proper scoring rule, o que significa que o valor mínimo esperado da métrica é alcançado apenas quando o modelo prevê as verdadeiras probabilidades. Seus valores variam de 0 a 1, onde um score mais baixo indica melhor calibração e acurácia das probabilidades. Ele combina, em uma única medida, tanto a calibração quanto a resolução (a capacidade do modelo de emitir previsões "afiadas", ou seja, próximas de 0 ou 1), tornando-se uma medida abrangente da qualidade da previsão probabilística \cite{renooij2004uncertaintruth}. 
+
+
+
 \section{SHAP (Shapley Additive exPlanations)}
 
 Conforme modelos de aprendizado de máquina tornaram-se mais complexos e opacos (como \textit{ensembles} de árvores ou redes neurais profundas), surgiu a necessidade de técnicas de interpretabilidade que permitam entender as predições produzidas. Dentre essas técnicas, o método SHAP (\textit{Shapley Additive exPlanations}) destacou-se pela fundamentação teórica e pela consistência das explicações geradas \cite{Lundberg2017}. O SHAP, proposto por Scott Lundberg e Su-In Lee, baseia-se no conceito de valor de Shapley da Teoria dos Jogos cooperativos. Em um jogo cooperativo, o valor de Shapley define como distribuir de forma justa a recompensa total obtida por uma coalizão de jogadores, atribuindo a cada jogador uma parcela da recompensa proporcional à sua contribuição marginal média. Analogamente, no contexto de modelos preditivos, cada “jogador” é uma \textit{feature} (variável de entrada) e a “recompensa” é a diferença entre a predição do modelo para uma instância e a predição média do modelo (ou de um baseline) \cite{Lundberg2017}. O SHAP então calcula, para uma dada instância, quanto cada feature contribuiu positiva ou negativamente para que o modelo produzisse aquele resultado em comparação a uma predição base.
@@ -547,11 +555,6 @@ No contexto deste projeto, a utilização de uma OTW visa garantir que o modelo 
 \end{figure}
 
 
-% -----------------------------------------------------------------------
-% 2.3 Técnicas de Machine Learning Aplicadas ao Esporte
-% -----------------------------------------------------------------------
-
-
 \section{Trabalhos Relacionados}
 
 Uma linha de pesquisa envolve \textit{ensembles} heterogêneos, combinando diferentes tipos de modelos preditivos. \citeauthor{Albert2021} integraram algoritmos de \textit{boosting} com redes neurais para prever a seleção de jogadores no All-Star Game da NBA, obtendo melhora de acurácia nas predições e acrescentando certa interpretabilidade por meio da análise das importâncias de atributos \cite{Albert2021}.
@@ -565,16 +568,350 @@ Contudo, uma crítica recorrente a muitos modelos preditivos é sua dependência
 Por fim, estudos recentes sugerem que a combinação de métricas individuais de jogadores com estatísticas coletivas de equipes eleva o poder preditivo dos modelos. O modelo híbrido \textit{MambaNet}, apresentado por \citeauthor{khanmohammadi2024}, exemplifica essa estratégia ao processar simultaneamente séries históricas de desempenho de times e de jogadores para estimar probabilidades de vitória e classificação aos playoffs \cite{khanmohammadi2024, mambanet2024}. Essa incorporação de dados em nível de jogador permitiu ao MambaNet superar abordagens baseadas apenas em estatísticas agregadas por equipe \cite{khanmohammadi2024}.
 
 
-
-
 % ========================================================================
 % DESENVOLVIMENTO
 % ========================================================================
 
-% ========================================================================
-% CAPÍTULO 3: DESENVOLVIMENTO E METODOLOGIA
-% ========================================================================
-\chapter{Desenvolvimento}
+\chapter{Metodologia}
+
+\section{Fonte e Coleta de Dados}
+
+Os dados primários foram extraídos por meio de consultas à \textit{API-NBA}, uma interface de programação de aplicações (API) comercialmente disponível. A escolha desta fonte justifica-se pela sua capacidade de fornecer dados estruturados, consistentes e de alta granularidade, atendendo às necessidades específicas do modelo em dois níveis: dados em nível de jogo e dados em nível de jogador. O primeiro consiste em um conjunto contendo o registro de cada partida, detalhando as equipes mandante e visitante, a data do confronto e os placares finais. O segundo consiste em um conjunto granular que contém as estatísticas individuais (\textit{box score}) de cada atleta para cada partida disputada.
+
+Adicionalmente, para complementar os dados históricos com informações sobre a disponibilidade atual dos elencos, foi implementado um processo de \textit{web scraping} no portal ESPN. Este processo extrai diariamente os \textit{depth charts} de cada equipe, identificando os jogadores titulares e reservas para cada posição, bem como o status de lesões reportado. Para garantir a robustez da coleta de dados via API e \textit{scraping}, foram implementadas estratégias de múltiplas tentativas de requisição, pausas exponenciais em caso de limites atingidos e intervalos regulares entre chamadas, minimizando falhas e respeitando os termos de uso das fontes.
+
+O escopo temporal dos dados abrange as temporadas regulares da \textit{National Basketball Association} a partir de 2021--2022 até a data de execução do processo de coleta (outubro de 2025), garantindo uma base de dados robusta para a análise.
+
+
+\section{Tratamento de Vazamento Temporal}
+
+Uma preocupação central na modelagem de séries temporais é o vazamento de dados (\textit{data leakage}), onde o modelo, durante o treinamento ou validação, inadvertidamente tem acesso a informações que não estariam disponíveis no momento da previsão real. No contexto de previsão de jogos, usar dados do próprio dia do jogo ou de dias futuros para calcular atributos preditivos comprometeria a validade da avaliação do modelo.
+
+Para mitigar esse risco e garantir a causalidade estrita, foram implementadas duas salvaguardas principais:
+\begin{enumerate}
+    \item \textbf{Buffer Temporal na Engenharia de Atributos:} Foi utilizada uma função que aplica um \textit{buffer} temporal, geralmente de 1 dia (24 horas). Ao calcular os atributos para um jogo ocorrendo na data $T$, essa função assegura que apenas dados de jogos ocorridos estritamente antes de $T$ (ou seja, até $T-1$) sejam consultados. Isso simula realisticamente a informação disponível no momento da previsão.
+    \item \textbf{Embargo na Validação Cruzada:} Durante a validação cruzada temporal, um período de ``embargo'' de 1 dia foi introduzido entre o final do conjunto de treinamento e o início do conjunto de validação. Isso evita que a performance na validação seja influenciada por dados muito próximos (ou do mesmo dia) aos últimos dados usados no treino, como ilustrado na Figura \ref{fig:uml_seq_embargo}.
+\end{enumerate}
+
+Essas medidas asseguram que a avaliação do modelo reflita de forma mais fidedigna seu desempenho esperado em um cenário de previsão operacional.
+
+% --- Figura 1: Atividade (visão geral buffer + embargo)
+\begin{figure}[H]
+    \centering
+    % Try common raster/vector variants; fallback to a boxed placeholder if missing
+    \IfFileExists{img/uml_atividade_vazamento.pdf}{%
+        \includegraphics[width=\linewidth]{img/uml_atividade_vazamento.pdf}
+    }{%
+        \IfFileExists{img/uml_atividade_vazamento.png}{%
+            \includegraphics[width=\linewidth]{img/uml_atividade_vazamento.png}
+        }{%
+            \fbox{\parbox{0.95\linewidth}{\centering Missing image: \texttt{img/uml\_atividade\_vazamento.pdf/png}. Please generate from the UML source in the \texttt{umls/} folder.}}
+        }
+    }
+    \caption{Tratamento de vazamento temporal: buffer de 24h na engenharia de atributos e embargo de 24h na validação.}
+    \label{fig:uml_atividade_vazamento}
+    \caption*{Fonte: elaboração própria.}
+\end{figure}
+
+% --- Figura 2: Sequência (detalhe da dobra com embargo)
+\begin{figure}[H]
+    \centering
+    % The source UML is provided as .puml; try common exported formats first, otherwise show placeholder
+    \IfFileExists{umls/embargo.pdf}{%
+        \includegraphics[width=\linewidth]{umls/embargo.pdf}
+    }{%
+        \IfFileExists{umls/embargo.png}{%
+            \includegraphics[width=\linewidth]{umls/embargo.png}
+        }{%
+            \fbox{\parbox{0.95\linewidth}{\centering UML source found: \texttt{umls/embargo.puml}. No PDF/PNG exported. Please render the diagram (e.g., PlantUML) to \texttt{umls/embargo.pdf} or \texttt{umls/embargo.png}.}}
+        }
+    }
+    \caption{Dobra temporal com embargo: geração de índices de treino/validação e avaliação do modelo.}
+    \label{fig:uml_seq_embargo}
+    \caption*{Fonte: elaboração própria.}
+\end{figure}
+
+% --- Figura 3: Classes (componentes que aplicam o controle temporal)
+\begin{figure}[H]
+    \centering
+    \IfFileExists{img/uml_classes_temporal.pdf}{%
+        \includegraphics[width=\linewidth]{img/uml_classes_temporal.pdf}
+    }{%
+        \IfFileExists{img/uml_classes_temporal.png}{%
+            \includegraphics[width=\linewidth]{img/uml_classes_temporal.png}
+        }{%
+            \fbox{\parbox{0.95\linewidth}{\centering Missing image: \texttt{img/uml\_classes\_temporal.pdf/png}. Please generate from the UML source in the \texttt{umls/} folder.}}
+        }
+    }
+    \caption{Componentes de controle temporal no pipeline: \texttt{safe\_temporal\_filter}, \texttt{TemporalValidator} e \texttt{FeatureBuilder}.}
+    \label{fig:uml_classes_temporal}
+    \caption*{Fonte: elaboração própria.}
+\end{figure}
+
+\section{Dataset de Jogos}
+
+O primeiro conjunto de dados contém informações agregadas para cada partida disputada no período analisado. Cada linha representa um único jogo e inclui as seguintes colunas principais:
+
+\begin{itemize}
+    \item \texttt{game\_id}: Identificador numérico único para cada partida. Serve como chave primária para relacionar com os dados de jogadores.
+    \item \texttt{date}: Data e hora de início da partida, em formato UTC. Utilizada para ordenação cronológica e cálculos temporais.
+    \item \texttt{home\_team\_code} / \texttt{away\_team\_code}: Códigos de três letras identificando as equipes mandante e visitante (e.g., 'LAL' para Los Angeles Lakers).
+    \item \texttt{home\_team\_name} / \texttt{away\_team\_name}: Nomes completos das equipes mandante e visitante.
+    \item \texttt{home\_score} / \texttt{away\_score}: Pontuação final das equipes mandante e visitante.
+    \item \texttt{arena}: Nome da arena onde o jogo foi disputado.
+    \item \texttt{city}: Cidade onde a arena está localizada.
+    \item \texttt{season}: Ano da temporada correspondente (e.g., 2021 para a temporada 2021-2022).
+    \item \texttt{status}: Status final do jogo (e.g., 'Finished').
+\end{itemize}
+
+Este dataset fornece o contexto geral de cada confronto, incluindo o resultado final, que é fundamental para a definição da variável alvo (\texttt{home\_win}).
+
+\section{Dataset de Estatísticas de Jogadores}
+
+O segundo conjunto de dados oferece uma visão granular do desempenho individual dos atletas em cada partida. Cada linha representa as estatísticas de um jogador específico em um determinado jogo, vinculada ao jogo correspondente através do \texttt{game\_id}. As colunas mais relevantes incluem:
+
+\begin{itemize}
+    \item \texttt{game\_id}: Chave estrangeira que referencia o jogo no dataset de partidas.
+    \item \texttt{date}: Data e hora da partida.
+    \item \texttt{team\_code}: Código da equipe pela qual o jogador atuou na partida.
+    \item \texttt{player\_id}: Identificador numérico único para cada jogador.
+    \item \texttt{player\_name}: Nome completo do jogador.
+    \item \texttt{pos}: Posição primária do jogador (e.g., 'G' para \textit{Guard}, 'F' para \textit{Forward}, 'C' para \textit{Center}). Pode estar vazia.
+    \item \texttt{min}: Minutos jogados na partida (formato texto, e.g., '30:15' ou vazio).
+    \item \texttt{points}: Total de pontos marcados.
+    \item \texttt{fgm}, \texttt{fga}, \texttt{fgp}: Cestas de campo convertidas (\textit{made}), tentadas (\textit{attempted}) e percentual de acerto (\textit{percentage}).
+    \item \texttt{ftm}, \texttt{fta}, \texttt{ftp}: Lances livres convertidos, tentados e percentual.
+    \item \texttt{tpm}, \texttt{tpa}, \texttt{tpp}: Arremessos de três pontos convertidos, tentados e percentual.
+    \item \texttt{offReb}, \texttt{defReb}, \texttt{totReb}: Rebotes ofensivos, defensivos e totais.
+    \item \texttt{assists}: Número de assistências.
+    \item \texttt{steals}: Número de roubos de bola.
+    \item \texttt{blocks}: Número de tocos.
+    \item \texttt{turnovers}: Número de perdas de bola (\textit{turnovers}).
+    \item \texttt{pFouls}: Número de faltas pessoais.
+    \item \texttt{plusMinus}: Saldo de pontos da equipe enquanto o jogador esteve em quadra (pode ser formato texto ou numérico).
+\end{itemize}
+
+Este dataset é a fonte primária para a engenharia de atributos relacionados ao desempenho recente dos jogadores e das equipes, permitindo calcular médias ponderadas, consistência e outras métricas avançadas que alimentam o modelo preditivo.
+
+Combinados, esses dois datasets fornecem uma base sólida e detalhada para a modelagem. O dataset de jogos estabelece o resultado e o contexto de cada evento, enquanto o dataset de jogadores permite a análise do desempenho que levou a esse resultado. A estrutura relacional, unida pelo \texttt{game\_id}, possibilita a criação de atributos complexos que consideram tanto o histórico das equipes quanto a performance individual recente dos atletas.
+
+A etapa de engenharia de atributos (\textit{feature engineering}) é crucial para transformar os dados brutos coletados e tratados em variáveis preditivas informativas que possam ser efetivamente utilizadas pelo modelo de \textit{machine learning}. O objetivo principal foi criar atributos que capturassem não apenas o desempenho médio histórico das equipes e jogadores, mas também a dinâmica temporal, a forma recente, a consistência, o contexto do calendário e as interações específicas de cada confronto.
+
+Para cada jogo no dataset, um conjunto rico de atributos foi calculado com base estritamente nos dados históricos disponíveis até o dia anterior à partida, garantindo a prevenção de vazamento temporal através da função \texttt{safe\_temporal\_filter}, conforme detalhado no Capítulo 3. A função principal orquestradora dessa lógica foi a \texttt{calculate\_advanced\_features\_with\_players}.
+
+\chapter{Engenharia de Features}
+
+A etapa de engenharia de atributos (\textit{feature engineering}) é crucial para transformar os dados brutos coletados e tratados em variáveis preditivas informativas que possam ser efetivamente utilizadas pelo modelo de \textit{machine learning}. O objetivo principal foi criar atributos que capturassem não apenas o desempenho médio histórico das equipes e jogadores, mas também a dinâmica temporal, a forma recente, a consistência, o contexto do calendário e as interações específicas de cada confronto.
+
+\section{Atributos Baseados no Histórico de Jogos}
+
+Para refletir o desempenho recente das equipes de forma mais precisa do que médias móveis simples, foram implementadas duas técnicas principais: a Janela Temporal Ótima (OTW) e a Ponderação Exponencial Dinâmica.
+
+\subsection{Janela Temporal Ótima (OTW)}
+A OTW determina dinamicamente o número de jogos passados ($N$) a serem considerados para cada equipe antes de uma partida específica. A janela base é de 10 jogos, com limites mínimo de 5 e máximo de 20. Esse tamanho é ajustado heuristicamente com base em:
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item \textbf{Fase da Temporada:} Janelas menores no início da temporada (menos de 30 dias) e ligeiramente maiores no final (mais de 150 dias).
+    \item \textbf{Volatilidade Recente:} Medida pelo coeficiente de variação do \textit{net rating} nos últimos 10 jogos. Alta volatilidade ($>$ 1.5) reduz a janela, enquanto baixa volatilidade ($<$ 0.5) a aumenta.
+    \item \textbf{Mudanças no Elenco:} Se a função \texttt{detect\_roster\_change} identifica uma alteração significativa nos 8 principais jogadores (baseado em minutos) nas últimas duas semanas (sobreposição $<$ 70\%), a janela é reduzida ao mínimo (5 jogos).
+    \item \textbf{Densidade de Jogos:} Muitos jogos na última semana ($\ge 4$) reduzem a janela; poucos jogos ($\le 1$) a aumentam.
+    \item \textbf{Mudança de Performance:} Compara o \textit{net rating} médio na janela atual com o período anterior de mesmo tamanho. Uma diferença grande ($>$ 10 pontos) sugere uma mudança de fase e encurta a janela.
+\end{itemize}
+
+Para cada confronto, a menor OTW calculada entre a equipe mandante e a visitante (\texttt{actual\_window}) é utilizada para garantir que ambos os times sejam avaliados sobre um histórico recente comparável em termos de número de jogos.
+
+\subsection{Ponderação Exponencial Dinâmica}
+Dentro da OTW selecionada, nem todos os jogos têm a mesma relevância. Jogos mais recentes e jogos de equipes com desempenho mais estável são considerados mais preditivos. A função \texttt{calculate\_dynamic\_weights} implementa um esquema de ponderação de decaimento exponencial, onde o peso $w_i$ de um jogo $i$ ocorrido $d_i$ dias antes da data de referência (data do jogo a ser previsto) é dado por:
+$$ w_i \propto \exp(-\lambda \cdot d_i) $$
+A taxa de decaimento $\lambda$ é adaptativa, modulada pela volatilidade recente ($\sigma$) do \textit{net rating} da equipe: $\lambda = 0.05 \times (1 + \sigma / 10)$. Times mais instáveis (maior $\sigma$) recebem um $\lambda$ maior, resultando em um decaimento mais rápido do peso dos jogos antigos. Os pesos são normalizados para somar 1.
+
+Todas as métricas de desempenho baseadas no histórico de jogos (e.g., média de pontos, taxa de vitórias) foram calculadas utilizando médias e desvios padrão ponderados (\texttt{wavg}, \texttt{wstd}) com esses pesos dinâmicos.
+
+\subsection{Atributos Gerados do Histórico}
+Utilizando a OTW e a ponderação dinâmica, os seguintes atributos foram calculados para cada equipe (mandante e visitante):
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item \textbf{Desempenho Geral:} \texttt{win\_rate}, \texttt{avg\_points}, \texttt{avg\_points\_allowed}, \texttt{net\_rating}.
+    \item \textbf{Sequências:} \texttt{streak} (sequência atual de vitórias/derrotas consecutivas).
+    \item \textbf{Momentum:} \texttt{momentum} (saldo de vitórias/derrotas nos últimos 3 jogos).
+    \item \textbf{Volatilidade:} \texttt{score\_volatility} (desvio padrão ponderado dos pontos marcados).
+    \item \textbf{Desempenho Casa/Fora:} Para os últimos 15 jogos em casa (mandante) ou fora (visitante), calculou-se a taxa de vitória e médias de pontos marcados/sofridos (\texttt{team\_home\_win\_rate}, \texttt{team\_away\_win\_rate}, etc.).
+\end{itemize}
+
+\section{Atributos Baseados em Estatísticas de Jogadores}
+
+Para capturar o impacto do desempenho individual e da composição do elenco, a função \texttt{calculate\_player\_features} foi desenvolvida. Para cada time, antes de um jogo, esta função analisa as estatísticas dos jogadores nos jogos dentro de um período recente (padrão de 30 dias, ajustado se houver poucos dados), também utilizando pesos de decaimento exponencial por jogo.
+
+\subsection{Agregação Ponderada}
+As estatísticas individuais de cada jogador (pontos, rebotes, assistências, \textit{plus-minus}, percentuais de arremesso, etc.) são agregadas em médias ponderadas pela recência dos jogos daquele jogador. Em seguida, essas médias por jogador são combinadas para gerar atributos em nível de time, utilizando um peso adicional baseado nos minutos médios jogados e no número de jogos disputados pelo jogador no período recente (\texttt{min\_avg * games\_played}). Isso garante que jogadores mais importantes na rotação tenham maior influência nos atributos agregados da equipe.
+
+\subsection{Atributos Gerados dos Jogadores}
+Os seguintes atributos foram criados para cada equipe a partir das estatísticas individuais:
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item \textbf{Médias Agregadas:} Médias ponderadas de todas as estatísticas básicas do \textit{box score} em nível de time (\texttt{player\_points\_avg}, \texttt{player\_assists\_avg}, etc.).
+    \item \textbf{Top Jogadores:} Estatísticas médias (pontos, rebotes, assistências, \textit{plus-minus}) dos 5 jogadores com maior média de minutos (\texttt{top1\_points}, \texttt{top2\_assists}, etc.).
+    \item \textbf{Consistência e Profundidade:} \texttt{player\_consistency} (mede a variabilidade da pontuação entre os jogadores, 1 - std/mean) e \texttt{player\_depth} (número de jogadores com média > 8 pontos).
+    \item \textbf{Ratings Heurísticos:} \texttt{player\_offensive\_rating} (combina pontos, eficiência e assistências) e \texttt{player\_defensive\_rating} (combina roubos, tocos e penaliza \textit{turnovers}).
+\end{itemize}
+
+\section{Atributos Contextuais e Derivados}
+
+Além das métricas de desempenho baseadas no histórico, outros atributos foram criados para fornecer contexto adicional:
+
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item \textbf{Descanso e Agenda:} Dias de descanso desde o último jogo (\texttt{rest\_days}), indicador de \textit{back-to-back} (\texttt{back\_to\_back}), número de jogos na última semana (\texttt{games\_last\_week}).
+    \item \textbf{Confronto Direto (H2H):} Taxa de vitória do mandante nos últimos 5 confrontos diretos contra o visitante (\texttt{h2h\_home\_win\_rate}), excluindo jogos na mesma semana.
+    \item \textbf{Temporais:} Mês (\texttt{month}), dia da semana (\texttt{day\_of\_week}), indicador de fim de semana (\texttt{is\_weekend}), dias desde o início da temporada (\texttt{days\_into\_season}) e fase da temporada (\texttt{season\_phase}).
+    \item \textbf{Atributos de Diferença:} Para a maioria das métricas calculadas para mandante e visitante (e.g., \texttt{win\_rate}, \texttt{net\_rating}, \texttt{rest\_days}, \texttt{momentum}, \texttt{streak}, médias de jogadores), foi calculada a diferença (mandante - visitante), como \texttt{win\_rate\_diff}, \texttt{net\_rating\_diff}, \texttt{rest\_advantage}, \texttt{player\_points\_avg\_diff}. Esses atributos capturam diretamente a vantagem relativa de uma equipe sobre a outra em diversas dimensões.
+    \item \textbf{Atributos de Matchup:} Comparação direta entre a força ofensiva de uma equipe e a defensiva da outra (\texttt{home\_off\_vs\_visitor\_def}, \texttt{visitor\_off\_vs\_home\_def}), calculada como a diferença entre a média de pontos marcados por uma equipe e a média de pontos sofridos pela adversária.
+\end{itemize}
+
+Este conjunto abrangente de atributos, combinando histórico ponderado, estatísticas detalhadas de jogadores, contexto do calendário e comparações diretas, forma a base de entrada para o modelo CatBoost descrito no capítulo seguinte. A Tabela \ref{tab:lista_features} (no Apêndice, se preferir) pode fornecer uma lista completa e descrição de todos os atributos gerados.
+
+\section{Validação Temporal com Embargo}
+
+\subsection{Justificativa da Validação Temporal}
+A natureza sequencial dos dados esportivos, onde os eventos são ordenados cronologicamente, invalida o uso de métodos de validação cruzada (CV) convencionais, como o K-Fold aleatório. O embaralhamento aleatório dos dados permitiria que o modelo fosse treinado com informações "do futuro" (jogos que ocorrem após o jogo a ser previsto), resultando em uma estimativa de performance excessivamente otimista e irrealista, um fenômeno conhecido como vazamento de dados temporais.
+
+Para resolver isso, foi implementada uma estratégia de validação estritamente cronológica, que simula o cenário operacional de prever o futuro com base apenas no passado.
+
+\subsection{Estratégia Implementada}
+Foi utilizada uma abordagem de \textit{walk-forward validation} (validação de janela deslizante) com três dobras. Para evitar qualquer sobreposição de informações, um período de \textit{embargo} de um dia foi instituído entre o final do conjunto de treino e o início do conjunto de validação de cada dobra. Foram estabelecidos tamanhos mínimos de 50 jogos para treino e 10 jogos para teste para garantir a robustez estatística de cada dobra.
+
+A Figura ilustra conceitualmente a divisão das dobras temporais, usando datas de exemplo para fins didáticos:
+
+FIGURAAAAAAAAAAAAAAAAAAAAAAAA
+
+\subsection{Resultados da Validação Cruzada}
+Este processo foi utilizado para avaliar e otimizar a arquitetura da engenharia de atributos. A Tabela resume o desempenho médio obtido durante a validação cruzada, demonstrando a consistência do modelo.
+
+\begin{table}[H]
+    \centering
+    \caption{Resultados da Validação Cruzada Temporal (3 Dobras).}
+    \label{tab:resultados_cv}
+    \begin{tabular}{ccccc}
+        \toprule
+        \textbf{Dobra (Fold)} & \textbf{Jogos de Treino} & \textbf{Jogos de Teste} & \textbf{AUC} & \textbf{Acurácia} \\
+        \midrule
+        1 & 1.847 & 184 & 0.68 & 0.65 \\
+        2 & 2.134 & 156 & 0.71 & 0.68 \\
+        3 & 2.298 & 142 & 0.69 & 0.66 \\
+        \midrule
+        \textbf{Média} & \textbf{2.093} & \textbf{161} & \textbf{0.69} & \textbf{0.66} \\
+        \textbf{Std. Dev.} & - & - & 0.01 & 0.01 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Os resultados demonstram um desempenho estável entre as dobras, com uma AUC média de 0.69 e acurácia média de 0.66. O baixo desvio padrão (0.01) tanto para a AUC quanto para a acurácia sugere que o modelo é sólido e não está sofrendo de sobreajuste significativo a um período de tempo específico. Esta performance consistente validou a arquitetura de atributos e permitiu prosseguir para o treinamento do modelo final.
+
+\section{Seleção e Configuração do Modelo} \label{sec:selecao_modelo}
+
+\subsection{Justificativa do Algoritmo (CatBoost)}
+O algoritmo selecionado para a tarefa de classificação foi o \textit{CatBoost Classifier}, uma implementação de \textit{Gradient Boosting} sobre árvores de decisão. A sua escolha foi motivada primariamente pela sua capacidade de lidar nativamente com um grande volume de atributos categóricos, como os códigos das equipes, mês e fase da temporada, sem a necessidade de pré-processamento manual como o \textit{one-hot encoding}. Esta abordagem nativa mitiga o risco da "maldição da dimensionalidade" (\textit{curse of dimensionality}).
+
+Adicionalmente, o CatBoost implementa uma técnica de \textit{Ordered Boosting}, que ajuda a prevenir o vazamento de informação da variável alvo durante o treinamento, e constrói árvores simétricas, o que pode reduzir o tempo de predição e o sobreajuste. A Tabela \ref{tab:algo_compare} resume a adequação do CatBoost em comparação com outras alternativas comuns para dados tabulares.
+
+\begin{table}[H]
+    \centering
+    \caption{Comparativo de algoritmos para a tarefa de classificação.}
+    \label{tab:algo_compare}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Critério} & \textbf{CatBoost} & \textbf{XGBoost} & \textbf{LightGBM} & \textbf{Reg. Logística} \\
+        \midrule
+        Var. Categóricas Nativas & $\checkmark$ & $\times$ & $\times$ & $\times$ \\
+        Ordered Boosting (Previne Vazamento) & $\checkmark$ & $\times$ & $\times$ & $\times$ \\
+        Árvores Simétricas & $\checkmark$ & $\times$ & $\times$ & (não se aplica) \\
+        Interpretabilidade (SHAP) & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ \\
+        Velocidade de Treino & $\sim$ & $\checkmark$ & $\checkmark$ & $\checkmark$ \\
+        \bottomrule
+    \end{tabular}%
+    }
+    \caption*{Legenda: $\checkmark$ (Suportado/Forte), $\times$ (Não Suportado/Fraco), $\sim$ (Neutro/Dependente)}
+\end{table}
+
+\subsection{Otimização de Hiperparâmetros}
+Para encontrar a combinação de hiperparâmetros mais robusta, foi empregado um processo de otimização Bayesiana, implementado através da biblioteca \textit{Optuna}. Cada conjunto de hiperparâmetros (um \textit{trial}) foi avaliado utilizando a mesma metodologia de validação cruzada temporal descrita, garantindo que a otimização respeitasse a ordem cronológica dos dados.
+
+O espaço de busca para a otimização incluiu parâmetros-chave como o número de iterações, a profundidade das árvores, a taxa de aprendizado, a regularização L2 e as taxas de amostragem de linhas e colunas. A Tabela \ref{tab:optuna_results} apresenta uma amostra dos \textit{trials} de otimização e o melhor resultado encontrado, que maximizou a métrica AUC.
+
+\begin{table}[H]
+    \centering
+    \caption{Resultados da Otimização de Hiperparâmetros com Optuna (amostra).}
+    \label{tab:optuna_results}
+    \begin{tabular}{ccccccc}
+        \toprule
+        \textbf{Trial} & \textbf{Iterações} & \textbf{Profundidade} & \textbf{Taxa Aprend. (LR)} & \textbf{L2} & \textbf{AUC (Val)} & \textbf{Tempo} \\
+        \midrule
+        1 & 250 & 5 & 0.030 & 5.0 & 0.664 & 2.3s \\
+        2 & 764 & 5 & 0.027 & 8.2 & 0.691 & 5.1s \\
+        3 & 500 & 7 & 0.040 & 3.0 & 0.673 & 4.2s \\
+        ... & ... & ... & ... & ... & ... & ... \\
+        \midrule
+        \textbf{Melhor} & \textbf{764} & \textbf{5} & \textbf{0.027} & \textbf{8.2} & \textbf{0.691} & \textbf{5.1s} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Configuração Final do Modelo}
+Com base nos resultados da otimização, o modelo final foi treinado no conjunto de treino completo (80\% dos dados) utilizando os hiperparâmetros ótimos encontrados:
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item \textbf{Iterações:} 764 (com parada antecipada de 20 rodadas)
+    \item \textbf{Profundidade da Árvore:} 5 (árvores rasas para mitigar sobreajuste)
+    \item \textbf{Taxa de Aprendizado:} $\approx 0.027$
+    \item \textbf{Regularização L2 (\textus{l2\_leaf\_reg}):} $\approx 8.17$
+    \item \textbf{Amostragem de Linhas (\textus{subsample}):} $\approx 0.96$
+    \item \textbf{Amostragem de Colunas (\textus{rsm}):} $\approx 0.998$
+    \item \textbf{Função de Perda:} \textit{Logloss} (adequada para classificação binária)
+    \item \textbf{Métrica de Avaliação:} \textit{AUC} (usada para otimização e parada antecipada)
+\end{itemize}
+
+Adicionalmente, todos os atributos categóricos (como \texttt{home\_team}, \texttt{visitor\_team}, \texttt{month}, etc.) foram explicitamente fornecidos ao modelo para tratamento nativo.
+
+\section{Tratamento de Variáveis Categóricas}
+\label{sec:tratamento_categoricas}
+
+\subsection{Abordagem Nativa do CatBoost}
+Uma das principais vantagens do CatBoost, e um fator decisivo para sua escolha, é o seu método nativo para tratar variáveis categóricas. Diferente de algoritmos como XGBoost ou Regressão Logística, o CatBoost não exige uma transformação manual prévia, como o \textit{one-hot encoding}.
+
+Em vez disso, ele emprega uma técnica chamada \textit{Ordered Target Statistics} (ou \textit{Ordered TS}). Para cada exemplo de treinamento, o CatBoost calcula um valor numérico para uma feature categórica com base na média do valor alvo de exemplos anteriores que possuem a mesma categoria. Para evitar vazamento de informação, este cálculo é feito sobre uma permutação aleatória dos dados. A fórmula simplificada para codificar o valor $k$ da feature $i$ é:
+
+\begin{equation}
+\hat{x}_{i,k} = \frac{\sum_{j:\sigma(j)<\sigma(k)} \mathbf{1}\{x_{ij} = x_{ik}\} \cdot y_j + a \cdot p}{\sum_{j:\sigma(j)<\sigma(k)} \mathbf{1}\{x_{ij} = x_{ik}\} + a}
+\end{equation}
+
+Onde:
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item $\mathbf{1}\{\cdot\}$ é a função indicadora (1 se a condição for verdadeira, 0 caso contrário).
+    \item $\sigma$ é uma permutação aleatória dos dados, garantindo que o valor para o exemplo $k$ só considere os exemplos $j$ que vieram antes dele na permutação.
+    \item $y_j$ é o valor alvo (0 ou 1) do exemplo anterior $j$.
+    \item $p$ é um \textit{prior} (a média global do \textit{target} no conjunto), que atua como correção de viés.
+    \item $a$ é um parâmetro de regularização (tipicamente $a=1$) que suaviza o efeito de categorias com poucos exemplos.
+\end{itemize}
+
+O resultado é que cada categoria é substituída por um valor numérico que representa sua capacidade preditiva histórica, calculado de forma a prevenir o sobreajuste.
+
+\subsection{Variáveis Categóricas Utilizadas}
+O modelo final utilizou um conjunto de atributos categóricos que capturam diferentes dimensões do contexto do jogo, conforme listado na Tabela \ref{tab:cat_features}.
+
+\begin{table}[H]
+    \centering
+    \caption{Variáveis Categóricas fornecidas ao modelo CatBoost.}
+    \label{tab:cat_features}
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Categoria} & \textbf{Valores Únicos (Aprox.)} & \textbf{Tipo} \\
+        \midrule
+        \texttt{home\_team} & 30 & Identificador \\
+        \texttt{visitor\_team} & 30 & Identificador \\
+        \texttt{month} & 12 & Cíclico/Ordinal \\
+        \texttt{day\_of\_week} & 7 & Cíclico/Ordinal \\
+        \texttt{is\_weekend} & 2 & Binário \\
+        \texttt{season\_phase} & 3 & Nominal (early/mid/late) \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
     
 Literalmente ainda em desenvolvimento
 

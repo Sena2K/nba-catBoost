@@ -1,0 +1,17 @@
+@startuml
+title Buffer temporal na engenharia de atributos
+
+start
+:Receber Jogo-alvo (data T);
+:Determinar "data segura" = T − 24h;
+:Selecionar apenas registros anteriores à data segura\nna Base de Partidas;
+:Selecionar apenas registros anteriores à data segura\nna Base de Estatísticas de Jogadores;
+:Construir atributos do Jogo-alvo usando somente\ninformação disponível até T−1;
+stop
+
+legend right
+T = data do jogo
+T−1 dia (24h) = buffer temporal
+Nenhum dado de T ou futuro é utilizado.
+end legend
+@enduml
