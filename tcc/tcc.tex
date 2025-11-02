@@ -842,13 +842,6 @@ A Tabela \ref{tab:cat_features} lista os atributos categóricos usados pelo mode
     \end{tabular}
 \end{table}
 
-\section{Calibração das Probabilidades}
-
-Após o treinamento do classificador, realizou-se uma etapa adicional para avaliar e, quando necessário, corrigir a qualidade das probabilidades geradas. A motivação é simples: um modelo pode ordenar bem os casos entre vitória e derrota e ainda assim apresentar probabilidades sistematicamente desajustadas. Esse desajuste aparece quando, por exemplo, jogos aos quais o modelo atribui 70\% de chance de vitória culminam em vitórias reais em proporção sensivelmente diferente de 70\%.
-
-O procedimento adotado seguiu três passos. Primeiro, foi medida a confiabilidade das previsões por faixas de probabilidade, juntamente com o cálculo do \textit{Brier score} e a inspeção da curva de calibração. Segundo, foi verificada a presença de viés sistemático de confiança, tanto em direção a favoritos como em direção a azarões. Terceiro, quando esse viés excedeu um limiar pré-definido, aplicou-se uma calibração isotônica como etapa pós-treino para readequar as probabilidades. A calibração utilizou partições temporais consistentes com a validação para evitar o uso indevido de informações futuras.
-
-Essa etapa metodológica tem dois benefícios práticos. Melhora a interpretabilidade das probabilidades, que passam a refletir frequências observadas de forma mais fiel. E favorece decisões dependentes de risco, como a escolha de limiares distintos de 0{,}50 para maximizar métricas específicas.
 
 \section{Análise de Ablação}
 
@@ -934,6 +927,23 @@ Linha de base (acurácia) & 53,77\% \\
 
 O ganho de 11,88 pontos percentuais em acurácia sobre a linha de base indica avanço significativo. A AUC-ROC de 0,7036 confirma boa discriminação entre vitórias e derrotas. Após calibração isotônica, observou-se redução do desvio médio entre probabilidade prevista e frequência observada.
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figuras/roc_pr_curves.png}
+\caption{Curvas ROC e Precision–Recall no conjunto de teste. A linha tracejada representa, respectivamente, o classificador aleatório (ROC) e a precisão média (PR).}
+\legend{Fonte: elaboração própria.}
+\label{fig:roc_pr_curves}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figuras/gain_lift_curves.png}
+\caption{Curvas de Ganho e de \textit{Lift} no conjunto de teste. À esquerda, o ganho acumulado de acertos ao ordenar a amostra por probabilidade prevista; a linha pontilhada indica o desempenho aleatório. À direita, o \textit{lift} (multiplicador do acerto vs.\ aleatório) por fração da amostra, com linha base em 1{,}0. Observa-se maior ganho nos decis iniciais e \textit{lift} $\approx 1{,}6$–$1{,}7$ no topo, decaindo gradualmente até 1{,}0.}
+\legend{Fonte: elaboração própria.}
+\label{fig:gain_lift}
+\end{figure}
+
+
 \section{Análises detalhadas}
 \label{sec:analises_detalhadas}
 
@@ -949,6 +959,17 @@ Por outro lado, o Indiana Pacers obteve 56{,}45\% de acerto em 62 jogos, com for
 Casos intermediários, como Los Angeles Lakers (64{,}71\%) e Denver Nuggets (64{,}62\%), reforçam o papel do mando de quadra e da sequência de calendário. O Charlotte Hornets destacou-se com 72{,}92\% de acerto, impulsionado por vitórias inesperadas fora de casa (84{,}62\% como visitante), mas com amostra reduzida que eleva a incerteza estatística.
 
 Essas diferenças não representam falhas do modelo, mas refletem variação estrutural entre franquias, já observada em estudos anteriores de previsão esportiva \cite{horvat2023}. Modelos baseados em histórico recente tendem a favorecer equipes de comportamento estável, enquanto times em reconstrução ou com grande rotatividade de atletas produzem flutuações maiores nas métricas preditivas. A incorporação de variáveis de entrosamento e estabilidade de \textit{lineup} pode atenuar parte dessa disparidade.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figuras/acc_por_time_dot.png}
+    \caption{Desempenho do modelo por equipe comparando a acurácia quando o time atua como \textbf{mandante} (círculos) e como \textbf{visitante} (xis). 
+    Cada par de marcadores é ligado por um segmento para facilitar a leitura do deslocamento mandante\,–\,visitante. 
+    Valores mais à direita indicam maior acurácia, diferenças grandes entre os marcadores sugerem forte assimetria de mando.}
+    \label{fig:acc_team_home_away}
+    \legend{Fonte: elaboração própria.}
+\end{figure}
+
 
 \subsection{Acurácia ao longo do tempo}
 \label{subsec:acc_tempo}
@@ -969,20 +990,24 @@ Para evitar superinterpretação, as acurácias mensais devem ser acompanhadas d
 
 \begin{figure}[H]
     \centering
-    \caption{Acurácia mensal do modelo no conjunto de teste (temporada 2024–2025)}
     \includegraphics[width=0.85\textwidth]{figuras/acc_geral.jpeg}
-    \caption*{
-        \small
-        Evolução da acurácia mensal do modelo entre outubro e abril da temporada 2024–2025. 
-        Observa-se estabilidade em torno de 65\% a 68\%, com leve elevação em março, possivelmente associada à consolidação das rotações e à redução de variabilidade entre equipes. 
-        \textit{Fonte:} Elaboração própria (2025).
-    }
+    \caption{Acurácia mensal do modelo no conjunto de teste (temporada 2024–2025). Observa-se estabilidade em torno de 65\%–68\%, com leve elevação em março, possivelmente associada à consolidação das rotações e à redução de variabilidade entre equipes.}
     \label{fig:acc_mes}
+    \legend{Fonte: elaboração própria (2025).}
 \end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figuras/acc_mes_ic.png} 
+    \caption{Evolução da acurácia mensal no conjunto de teste, com faixa sombreada indicando o intervalo de confiança binomial de 95\%. A linha contínua com marcadores representa a acurácia de cada mês e a linha tracejada indica a linha de base (\(\approx 0{,}536\)). Observa-se maior incerteza em meses com amostras menores (faixas mais largas).}
+    \label{fig:acc_mensal_ic95}
+    \legend{Fonte: elaboração própria.}
+\end{figure}
+
 
 \subsection{Análise de limiar de decisão}
 \label{subsec:limiar}
-A variação do limiar de decisão permite ajustar precisão e recall conforme objetivo do usuário. Observou-se ponto de equilíbrio adequado em torno de um limiar superior a 0,50. A Tabela \ref{tab:threshold} apresenta um exemplo ilustrativo. Recomenda-se incluir o gráfico da aba \textit{Threshold\_Analysis} como Figura \ref{fig:threshold_curve}.
+A variação do limiar de decisão permite ajustar precisão e recall conforme objetivo do usuário. Observou-se ponto de equilíbrio adequado em torno de um limiar superior a 0,50. A Tabela \ref{tab:threshold} apresenta um exemplo ilustrativo. 
 
 \begin{table}[H]
 \centering
@@ -1003,33 +1028,53 @@ Limiar & Acurácia & Precisão & Recall \\
 \begin{figure}[H]
 \centering
 \caption{Curva de desempenho por limiar de decisão}
-\includegraphics[width=0.75\textwidth]{figuras/threshold_curve.png}
-\caption*{\footnotesize Fonte: elaboração própria a partir de \textit{Threshold\_Analysis}.}
+\includegraphics[width=0.75\textwidth]{figuras/threshold_tradeoffs.png}
+\caption*{\footnotesize Fonte: elaboração própria.}
 \label{fig:threshold_curve}
 \end{figure}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figuras/threshold_tradeoffs.png}
+\caption{Trade-offs entre métricas por limiar de decisão. As curvas mostram Accuracy, Precision, Recall e F1 em função do limiar; a linha tracejada marca o threshold padrão (0{,}5).}
+\legend{Fonte: elaboração própria.}
+\label{fig:threshold_curve}
+\end{figure}
+
+
 \section{Análise de ablação}
 \label{sec:ablacao}
-Para mensurar a contribuição de grupos de variáveis, foram comparadas três configurações: modelo completo, modelo sem atributos de jogadores e baseline com atributos básicos de equipe e calendário. A Tabela \ref{tab:ablacao} resume os resultados.
+Para mensurar a contribuição de diferentes grupos de variáveis na performance do modelo, foram comparadas três configurações progressivamente mais simples:
 
 \begin{table}[H]
-\centering
-\caption{Resultados da análise de ablação}
-\label{tab:ablacao}
-\footnotesize
-\begin{tabular}{lccc}
-\hline
-Configuração & AUC & Acurácia & Diferença vs. completo \\
-\hline
-Completo & 0,7036 & 65,64\% & — \\
-Sem atributos de jogadores & 0,6610 & 61,20\% & −4,44 p.p. \\
-Baseline equipe e calendário & 0,5890 & 55,12\% & −10,52 p.p. \\
-\hline
-\end{tabular}
+    \centering
+    \caption{Resultados da análise de ablação}
+    \label{tab:ablacao}
+    \footnotesize
+    \begin{tabular}{lccc}
+        \toprule
+        Configuração & AUC & Acurácia & $\Delta$ vs. completo \\
+        \midrule
+        Modelo completo & 0,7036 & 65,64\% & --- \\
+        Sem atributos de jogadores & 0,6610 & 61,20\% & -4,44 p.p. \\
+        Baseline (equipe + calendário) & 0,5890 & 55,12\% & -10,52 p.p. \\
+        \bottomrule
+    \end{tabular}
+    \caption*{\small Nota: p.p. = pontos percentuais. O modelo completo inclui todas as features descritas no Capítulo 3. 
+    A versão sem atributos de jogadores remove as agregações de estatísticas individuais. 
+    O baseline mantém apenas métricas básicas de equipe e variáveis de calendário.}
 \end{table}
 
-Os resultados indicam que os atributos em nível de elenco respondem por parcela relevante do ganho preditivo em relação ao baseline.
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figuras/ablation_comparison.png} 
+\caption{Comparação entre o modelo sem atributos de jogadores (baseline) e o modelo completo no conjunto de teste. À esquerda, acurácia (\%); à direita, AUC.}
+\legend{Fonte: elaboração própria.}
+\label{fig:ablacao_barras}
+\end{figure}
 
+
+Os resultados indicam que os atributos derivados de estatísticas individuais dos jogadores contribuem significativamente para o desempenho do modelo, respondendo por aproximadamente 42\% do ganho total de acurácia sobre o baseline (4,44 de 10,52 pontos percentuais). A queda substancial de AUC ao remover estas variáveis (de 0,7036 para 0,6610) sugere que informações no nível do jogador são cruciais para a capacidade discriminativa do modelo.
 \section{Explicabilidade das predições}
 \label{sec:shap_resultados}
 A análise SHAP em teste temporal apontou maior impacto para diferenças de desempenho recente entre mandante e visitante, vantagem de descanso, indicadores de sequência e agregados de jogadores com maior tempo em quadra. Recomenda-se incluir:
@@ -1038,45 +1083,50 @@ A análise SHAP em teste temporal apontou maior impacto para diferenças de dese
 \item Gráfico de valores SHAP por amostra com coloração por feature value como Figura \ref{fig:shap_beeswarm}.
 \end{itemize}
 
-\begin{figure}[H]
-\centering
-\caption{Importância média de atributos segundo SHAP}
-\includegraphics[width=0.80\textwidth]{figuras/shap_importances.png}
-\caption*{\footnotesize Fonte: elaboração própria a partir de \textit{Feature\_Importances} e \textit{Per\_Game\_Group\_SHAP}.}
-\label{fig:shap_importance}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\caption{Distribuição de valores SHAP em teste}
-\includegraphics[width=0.80\textwidth]{figuras/shap_beeswarm.png}
-\caption*{\footnotesize Fonte: elaboração própria a partir de \textit{Per\_Game\_SHAP}.}
-\label{fig:shap_beeswarm}
-\end{figure}
-
 \section{Validação da janela temporal ótima}
 \label{sec:otw_resultados}
 A avaliação empírica com diferentes comprimentos de janela mostrou melhor desempenho médio entre 8 e 12 jogos, enquanto janelas curtas aumentam ruído e janelas longas diluem a forma recente. A Figura \ref{fig:otw_auc} ilustra o comportamento AUC por tamanho de janela. Esses achados sustentam a heurística dinâmica adotada entre 5 e 20 jogos.
 
-\begin{figure}[H]
+
+
+\section{Calibração das Probabilidades}
+
+Após o treinamento do classificador, avaliou-se a qualidade das probabilidades prevendo a confiabilidade por faixas, o \textit{Brier score} e a curva de calibração. Um modelo pode discriminar bem vitórias e derrotas e, ainda assim, apresentar probabilidades desajustadas; por exemplo, atribuir 70\% de chance e observar frequências reais afastadas desse valor.
+
+O procedimento adotado seguiu três passos: (i) medição da confiabilidade por faixas de probabilidade e cálculo do \textit{Brier score}; (ii) verificação de viés sistemático de confiança, tanto para favoritos quanto para azarões; (iii) aplicação de calibração pós-treino quando o viés excedeu um limiar pré-definido. As partições respeitaram a cronologia para evitar uso indevido de informações futuras.
+
+Nos resultados deste trabalho, a calibração isotônica melhorou levemente o \textit{Brier score} no conjunto de teste (0{,}2178 para 0{,}2167), porém reduziu discretamente a AUC (0{,}7143 para 0{,}7123) e piorou o \textit{log loss} (0{,}6258 para 0{,}7051). Assim, as probabilidades calibradas são mais fiéis em termos de frequência observada, mas, para decisões sensíveis a \textit{log loss} e ordenação, o modelo não calibrado apresentou desempenho superior.
+
+\begin{figure}[htbp]
 \centering
-\caption{AUC em função do tamanho da janela de jogos}
-\includegraphics[width=0.70\textwidth]{figuras/otw_auc.png}
-\caption*{\footnotesize Fonte: elaboração própria a partir de \textit{otw\_analysis\_results\_fixed.xlsx}.}
-\label{fig:otw_auc}
+\includegraphics[width=\textwidth]{figuras/calibration_ece.png}
+\caption{Curva de confiabilidade do modelo no conjunto de teste. A linha tracejada indica calibração perfeita; a linha contínua apresenta a fração de vitórias reais por faixa de probabilidade.}
+\legend{Fonte: elaboração própria.}
+\label{fig:calib_ece}
 \end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Métricas antes e depois da calibração no conjunto de teste}
+\begin{tabular}{lcc}
+\toprule
+Métrica & Antes & Depois (isotônica) \\
+\midrule
+Acurácia          & 0{,}6638 & 0{,}6626 \\
+AUC-ROC           & 0{,}7143 & 0{,}7123 \\
+\textit{Log loss} & 0{,}6258 & 0{,}7051 \\
+\textit{Brier score} & 0{,}2178 & 0{,}2167 \\
+\bottomrule
+\end{tabular}
+\legend{Fonte: elaboração própria.}
+\label{tab:calibracao_metricas}
+\end{table}
+
 
 \section{Estudo de caso de predição individual}
 \label{sec:pred_individual}
 Para um confronto prospectivo, o pipeline gera atributos com base apenas nas informações disponíveis até a véspera e retorna a probabilidade prevista de vitória. Recomenda-se incluir um exemplo de predição com explicabilidade local, conforme arquivo \textit{predicao\_jogo\_individual.xlsx}, destacando os principais fatores contribuintes segundo SHAP local. A Figura \ref{fig:shap_local} pode apresentar a decomposição contribucional da probabilidade para o jogo escolhido.
 
-\begin{figure}[H]
-\centering
-\caption{Explicação local por SHAP para um jogo específico}
-\includegraphics[width=0.80\textwidth]{figuras/shap_local.png}
-\caption*{\footnotesize Fonte: elaboração própria a partir de \textit{predicao\_jogo\_individual.xlsx}.}
-\label{fig:shap_local}
-\end{figure}
 
 \section{Discussão dos resultados}
 \label{sec:discussao_resultados}
@@ -1125,5 +1175,5 @@ Por conta de limitações impostas no projeto para poder ser desenvolvido no tem
 
 \postextual
 \bibliographystyle{abntex2-alf}
-\bibliography{bibliografia}
+\bibliography{tcc/bibliografia}
 \end{document}
