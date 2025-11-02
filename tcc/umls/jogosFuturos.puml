@@ -1,0 +1,38 @@
+@startuml
+title Cenário de uso: previsão antes do jogo
+
+actor Operador
+participant "Orquestrador de previsão" as Orq
+participant "Coletor de dados" as Data
+participant "Validador temporal" as Time
+participant "Engenharia de atributos" as Feat
+participant "Modelo de classificação" as Model
+participant "Calibrador (opcional)" as Cal
+participant "Ajuste de limiar" as Thr
+participant "Registro e monitoramento" as Mon
+
+Operador -> Orq: Iniciar previsão para jogo em T
+Orq -> Data: Buscar dados de equipes e jogadores até T - 24h
+Data --> Orq: Dados brutos validados por data
+Orq -> Time: Conferir janela segura e embargo de 24h
+Time --> Orq: Ok, sem uso de dados do mesmo dia
+
+Orq -> Feat: Gerar atributos no mesmo esquema do treinamento
+Feat --> Orq: Vetor de atributos X
+
+Orq -> Model: Predict_proba(X)
+Model --> Orq: p = P(vitória do mandante)
+
+alt Calibração habilitada
+  Orq -> Cal: Ajustar probabilidades (isotônica) com janela recente rotulada
+  Cal --> Orq: p_cal
+else Sem calibração
+  Orq --> Orq: p_cal = p
+end
+
+Orq -> Thr: Aplicar limiar θ definido na análise operacional
+Thr --> Orq: Classe prevista
+
+Orq -> Mon: Registrar p_cal, classe, intervalo de confiança, versão do modelo e time-stamp
+Mon --> Operador: Probabilidade e classe previstas
+@enduml
