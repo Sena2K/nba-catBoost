@@ -1078,11 +1078,17 @@ Para mensurar a contribuição de diferentes grupos de variáveis na performance
 Os resultados indicam que os atributos derivados de estatísticas individuais dos jogadores contribuem significativamente para o desempenho do modelo, respondendo por aproximadamente 42\% do ganho total de acurácia sobre o baseline (4,44 de 10,52 pontos percentuais). A queda substancial de AUC ao remover estas variáveis (de 0,7036 para 0,6610) sugere que informações no nível do jogador são cruciais para a capacidade discriminativa do modelo.
 \section{Explicabilidade das predições}
 \label{sec:shap_resultados}
-A análise SHAP em teste temporal apontou maior impacto para diferenças de desempenho recente entre mandante e visitante, vantagem de descanso, indicadores de sequência e agregados de jogadores com maior tempo em quadra. Recomenda-se incluir:
-\begin{itemize}
-\item Gráfico de importância média de atributos em teste como Figura \ref{fig:shap_importance}.
-\item Gráfico de valores SHAP por amostra com coloração por feature value como Figura \ref{fig:shap_beeswarm}.
-\end{itemize}
+A análise SHAP em teste temporal apontou maior impacto para diferenças de desempenho recente entre mandante e visitante, vantagem de descanso, indicadores de sequência e agregados de jogadores com maior tempo em quadra. A Figura \ref{fig:shap_importance} apresenta as 20 variáveis mais importantes segundo a média de valores absolutos de SHAP.
+% --- (1) Importâncias médias por SHAP (Top 20) ---
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figuras/shap.jpeg}
+    \caption{Top 20 variáveis mais importantes segundo a média de $|$SHAP$|$ no conjunto de teste. 
+    As barras indicam a contribuição média absoluta para deslocar a probabilidade de vitória do mandante.}
+    \legend{Fonte: elaboração própria.}
+    \label{fig:shap_importance}
+\end{figure}
+
 
 \section{Validação da janela temporal ótima}
 \label{sec:otw_resultados}
