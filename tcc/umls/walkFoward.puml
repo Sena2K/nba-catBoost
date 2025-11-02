@@ -1,0 +1,24 @@
+@startuml
+title Validação temporal com embargo (walk-forward)
+
+partition "Preparação de dados" {
+  start
+  :Ordenar jogos por data;
+  :Extrair dias únicos;
+}
+
+partition "Geração de features" {
+  :Para cada jogo, usar apenas registros com data < T - 24h;
+}
+
+partition "Validação walk-forward" {
+  repeat
+    :Definir janela de teste [T..T+k];
+    :Calcular embargo_cut = T - 1 dia;
+    :Treino = {data < embargo_cut};
+    :Validação = {data ∈ [T..T+k]};
+    :Treinar modelo e registrar métricas;
+  repeat while (dobras restantes?)
+  stop
+}
+@enduml

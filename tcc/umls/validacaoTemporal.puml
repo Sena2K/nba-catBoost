@@ -1,0 +1,20 @@
+@startuml
+title Pipeline de validação temporal
+
+actor Pesquisador
+participant "Preparação de dados" as Prep
+participant "Engenharia de atributos" as Feat
+participant "Validador temporal" as Val
+participant "Modelo" as Mod
+
+Pesquisador -> Prep: Ordenar por data e dias únicos
+loop Dobra 1..3
+  Pesquisador -> Val: Definir [T..T+k] e embargo_cut
+  Val -> Prep: Selecionar treino e validação
+  Prep --> Val: Conjuntos prontos
+  Val -> Feat: Gerar features com dados < T - 24h
+  Feat --> Val: X_train, X_val
+  Val -> Mod: Treinar e avaliar
+  Mod --> Val: Métricas
+end
+@enduml

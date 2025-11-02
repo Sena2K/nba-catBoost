@@ -767,10 +767,28 @@ Esse conjunto de atributos combinando histórico ponderado, estatísticas de jog
 \subsection{Justificativa da validação temporal}
 Dados esportivos são sequenciais: o futuro não pode “vazar” para o passado. Métodos aleatórios de validação cruzada superestimariam o desempenho por misturar jogos posteriores aos que estão sendo previstos. Para refletir o uso real do sistema, adotou-se validação estritamente cronológica.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figuras/validacaoTemporal.png}
+\caption{Pipeline de validação temporal: etapas e laço de dobras}
+\legend{Fonte: elaboração própria.}
+\label{fig:walkforward_sequencia}
+\end{figure}
+
+
+
 \subsection{Estratégia implementada}
 Aplicou-se o esquema \textit{walk-forward} com três dobras. Entre o fim de cada conjunto de treino e o início do conjunto de validação impôs-se um embargo de um dia, eliminando sobreposições. Cada dobra respeitou tamanhos mínimos de 50 jogos para treino e 10 para teste, garantindo consistência estatística. A figura correspondente ilustra, com datas fictícias, a composição dessas dobras.
 
-FIGURAAAAAAAAAAAAAAAAAAAAAAAA
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.4\textwidth]{figuras/walkFoward.png}
+\caption{Validação temporal com embargo em esquema \textit{walk-forward}}
+\legend{Elaboração própria}
+\label{fig:walkforward_atividade}
+\end{figure}
+
+
 
 \section{Seleção e Configuração do Modelo}
 \label{sec:selecao_modelo}
