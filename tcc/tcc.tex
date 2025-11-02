@@ -210,13 +210,9 @@ Um dos maiores desafios na aplicação de aprendizado de máquina é o "dilema d
 
 \section{Objetivos}
 
-Os objetivos deste trabalho estão divididos em objetivo geral, que se propõe a responder a questão de pesquisa, e objetivos específicos, que detalham os passos necessários para se atingir o objetivo geral.
-
-\subsection{Objetivo}
-
 O estudo aqui descrito pretende desenvolver um modelo baseado no algoritmo de gradient boosting (CatBoost), visando propor um método nele baseado, para a previsão de resultados de partidas da NBA. Neste caso, a própria forma recente das equipes e as estatísticas avançadas dos jogadores são utilizadas para verificar a probabilidade de vitória de cada time.
 
-A abordagem proposta busca definir de maneira mais fiel o momento (ou "forma") atual de uma equipe, utilizando janelas temporais adaptativas e pesos dinâmicas, permitindo assim descobrir com mais precisão os padrões que levam à vitória.
+A abordagem proposta busca definir de maneira mais fiel o momento (ou "forma") atual de uma equipe, utilizando e pesos dinâmicas, permitindo assim descobrir com mais precisão os padrões que levam à vitória.
 
 \subsection{Objetivo Específico}
 \begin{itemize}
@@ -252,7 +248,7 @@ Outra classe importante são as métricas baseadas em \textit{plus/minus}, que a
 \centering
 \caption{Distribuição dos valores de BPM 2.0 entre 1974 e 2019.}
 
-%%\includegraphics[width=8cm]{figuras/plusminus.png}
+\includegraphics[width=8cm]{figuras/plusminus (1).png}
 \legend{Fonte: \url{https://www.basketball-reference.com/about/bpm2.html}}
 \label{fig:bpm_hist}
 \end{figure}
@@ -262,14 +258,6 @@ Outra classe importante são as métricas baseadas em \textit{plus/minus}, que a
 \section{Inteligência Artificial}
 
 A Inteligência Artificial (IA) é o campo da computação dedicado ao desenvolvimento de sistemas capazes de realizar tarefas que normalmente requereriam inteligência humana, como reconhecimento de padrões e tomada de decisão. Desde os primórdios, nos anos 1950, busca-se criar agentes artificiais que percebam o ambiente e ajam de forma autônoma para atingir objetivos estabelecidos\cite{Russell2010}.
-
-\subsection{Aprendizado Supervisionado}
-
-No aprendizado supervisionado, o algoritmo recebe um conjunto de exemplos de treinamento compostos por pares de entrada e saída esperada (rótulo ou valor) \cite{mitchell1997}. O objetivo é aprender uma função ou modelo que mapeie as entradas para as saídas corretas, de forma geral para novos dados não vistos. Tipicamente, problemas supervisionados subdividem-se em classificação (quando a saída é uma classe ou categoria) e regressão (quando a saída é um valor numérico contínuo) \cite{Alpaydin2010}. Exemplos de algoritmos supervisionados incluem regressão logística, máquinas de vetores de suporte (SVM), árvores de decisão e redes neurais artificiais \cite{mitchell1997,Alpaydin2010}. 
-
-Esses algoritmos ajustam seus parâmetros internos para minimizar um erro de previsão em relação aos rótulos conhecidos do conjunto de treino. Quando bem-sucedido, o modelo resultante consegue generalizar o aprendizado para realizar previsões acuradas em novos dados \cite{mitchell1997}. Nos últimos anos, métodos de aprendizado profundo (\textit{deep learning}, redes neurais com muitas camadas) tornaram-se proeminentes dentro do paradigma supervisionado, alcançando avanços significativos em tarefas como reconhecimento de imagens e jogos estratégicos \cite{goodfellow2016}.
- Embora redes profundas exijam grandes volumes de dados e poder computacional, elas demonstram o potencial do aprendizado supervisionado quando as condições de treinamento são favoráveis \cite{goodfellow2016}.
-
 \subsection{Aprendizado de Máquina}
 
 O Aprendizado de Máquina (ML), uma das principais subáreas da IA, desenvolve algoritmos que permitem ao computador aprender padrões ou comportamentos a partir de dados e melhorar seu desempenho em tarefas específicas. Uma definição clássica descreve que um algoritmo de ML explora dados de treinamento para induzir um modelo capaz de fazer predições ou decisões sem ser explicitamente programado para cada caso \cite{mitchell1997}.
@@ -281,6 +269,13 @@ Os métodos de ML costumam ser categorizados em aprendizado supervisionado, não
 A técnica de \textit{boosting}, introduzida por Freund e Schapire\cite{Freund1997} e posteriormente generalizada por Friedman\cite{Friedman2001}, combina múltiplos modelos fracos de forma sequencial para formar um modelo final mais sólido. Implementações modernas, como o XGBoost\cite{Chen2016} e o CatBoost\cite{Prokhorenkova2018}, incorporam diversas otimizações e obtêm desempenho de ponta em muitos cenários de classificação e regressão.
 
 %%Aqui eu acho que esse último paragráfo é melhor que o primeiro paragráfo dos algoritmos de boosting
+
+\subsection{Aprendizado Supervisionado}
+
+No aprendizado supervisionado, o algoritmo recebe um conjunto de exemplos de treinamento compostos por pares de entrada e saída esperada (rótulo ou valor) \cite{mitchell1997}. O objetivo é aprender uma função ou modelo que mapeie as entradas para as saídas corretas, de forma geral para novos dados não vistos. Tipicamente, problemas supervisionados subdividem-se em classificação (quando a saída é uma classe ou categoria) e regressão (quando a saída é um valor numérico contínuo) \cite{Alpaydin2010}. Exemplos de algoritmos supervisionados incluem regressão logística, máquinas de vetores de suporte (SVM), árvores de decisão e redes neurais artificiais \cite{mitchell1997,Alpaydin2010}. 
+
+Esses algoritmos ajustam seus parâmetros internos para minimizar um erro de previsão em relação aos rótulos conhecidos do conjunto de treino. Quando bem-sucedido, o modelo resultante consegue generalizar o aprendizado para realizar previsões acuradas em novos dados \cite{mitchell1997}. Nos últimos anos, métodos de aprendizado profundo (\textit{deep learning}, redes neurais com muitas camadas) tornaram-se proeminentes dentro do paradigma supervisionado, alcançando avanços significativos em tarefas como reconhecimento de imagens e jogos estratégicos \cite{goodfellow2016}.
+ Embora redes profundas exijam grandes volumes de dados e poder computacional, elas demonstram o potencial do aprendizado supervisionado quando as condições de treinamento são favoráveis \cite{goodfellow2016}.
 
 \subsection{Algoritmos de Boosting}\label{subsec:boosting-geral} O boosting é uma técnica de aprendizado de máquina que combina vários modelos simples (``fracos'') de forma sequencial para formar um modelo final mais forte e preciso\cite{AWSBoosting}. 
 
@@ -310,7 +305,7 @@ Com o crescente uso do boosting em aplicações do mundo real, surgiram melhoria
 \begin{figure}[htb]
     \centering
         \caption{Funcionamento do boosting como técnica de aprendizado de máquina baseada em múltiplos classificadores sequenciais.}
-    %%\\includegraphics[width=0.9\textwidth]{figuras/Texto do seu parágrafo (1).png}
+    \includegraphics[width=0.9\textwidth]{figuras/Texto do seu parágrafo (1) (1).png}
     \legend{Fonte: \url{https://commons.wikimedia.org/wiki/File:Ensemble_Boosting.svg}}
     \label{fig:boosting}
 \end{figure}
@@ -360,7 +355,7 @@ Além disso, o CatBoost adota árvores de decisão simétricas (também chamadas
 \begin{figure}[H]
     \centering
     \caption{Fluxo do algoritmo CatBoost baseado em Gradiente Boosting. O modelo é treinado com subconjuntos amostrados via bootstrap, com atualização sequencial de pesos e preditores.}
-   %%\ \includegraphics[width=0.9\textwidth]{figuras/Dataset.png}
+    \includegraphics[width=0.9\textwidth]{figuras/Dataset (1).png}
     \legend{Fonte: Adaptado de \citeonline{zeng2023}. }
     \label{fig:catboost}
 \end{figure}
@@ -527,7 +522,7 @@ Estudos recentes já começaram a aplicar o SHAP na área de análise esportiva:
 \begin{figure}[H]
     \centering
         \caption{Framework do algoritmo SHAP (2025).}
-  %%\  \includegraphics[width=0.5\textwidth]{figuras/Dados.png}
+   \includegraphics[width=0.5\textwidth]{figuras/Dados (1).png}
     \legend{Fonte: Adaptado de \url{https://www.researchgate.net/figure/Framework-of-the-SHAP-algorithm_fig1_390988996}}
     \label{fig:shap-framework}
 \end{figure}
@@ -545,10 +540,10 @@ Cabe ressaltar, que determinar a OTW ideal não é trivial e demanda testes expe
 
 No contexto deste projeto, a utilização de uma OTW visa garantir que o modelo de previsão esteja sempre treinado com dados suficientemente recentes para refletir a performance atual das equipes, sem entretanto descartar tantos dados a ponto de perder significância estatística. Com base na literatura \cite{Horvat2020PhD,horvat2023}, espera-se que essa abordagem contribua para um modelo mais adaptado às condições vigentes em cada período da liga, complementando as demais técnicas empregadas.
 
-\begin{figure}[htb]
+\begin{figure}[H]
     \centering
     \caption{Ilustração das Janelas Temporais Ótimas (OTWs, em verde) e sua relação com os intervalos de tempo dos conjuntos de dados de treinamento (em azul claro), para N jogos do time observado.}
-   %%\ \includegraphics[width=0.7\textwidth]{figuras/1 temporada.png} 
+    \includegraphics[width=0.7\textwidth]{figuras/1 temporada (2).png} 
 
     \legend{Fonte: Adaptado \citeonline{horvat2023}}
     \label{fig:otw-illustration}
@@ -580,7 +575,7 @@ Os dados primários foram extraídos por meio de consultas à \textit{API-NBA}, 
 
 Adicionalmente, para complementar os dados históricos com informações sobre a disponibilidade atual dos elencos, foi implementado um processo de \textit{web scraping} no portal ESPN. Este processo extrai diariamente os \textit{depth charts} de cada equipe, identificando os jogadores titulares e reservas para cada posição, bem como o status de lesões reportado. Para garantir a robustez da coleta de dados via API e \textit{scraping}, foram implementadas estratégias de múltiplas tentativas de requisição, pausas exponenciais em caso de limites atingidos e intervalos regulares entre chamadas, minimizando falhas e respeitando os termos de uso das fontes.
 
-O escopo temporal dos dados abrange as temporadas regulares da \textit{National Basketball Association} a partir de 2021--2022 até a data de execução do processo de coleta (outubro de 2025), garantindo uma base de dados robusta para a análise.
+O escopo temporal dos dados abrange as temporadas regulares da \textit{National Basketball Association} a partir de 2021--2022 até a data de execução do processo de coleta (novembro de 2025), garantindo uma base de dados robusta para a análise.
 
 
 \section{Tratamento de Vazamento Temporal}
@@ -595,57 +590,35 @@ Para mitigar esse risco e garantir a causalidade estrita, foram implementadas du
 
 Essas medidas asseguram que a avaliação do modelo reflita de forma mais fidedigna seu desempenho esperado em um cenário de previsão operacional.
 
-% --- Figura 1: Atividade (visão geral buffer + embargo)
 \begin{figure}[H]
     \centering
-    % Try common raster/vector variants; fallback to a boxed placeholder if missing
-    \IfFileExists{img/uml_atividade_vazamento.pdf}{%
-        \includegraphics[width=\linewidth]{img/uml_atividade_vazamento.pdf}
-    }{%
-        \IfFileExists{img/uml_atividade_vazamento.png}{%
-            \includegraphics[width=\linewidth]{img/uml_atividade_vazamento.png}
-        }{%
-            \fbox{\parbox{0.95\linewidth}{\centering Missing image: \texttt{img/uml\_atividade\_vazamento.pdf/png}. Please generate from the UML source in the \texttt{umls/} folder.}}
-        }
+    \caption{Buffer temporal na engenharia de atributos}
+    \includegraphics[width=0.65\textwidth]{umls/bufferTemporaç.png}
+    \caption*{
+        \small
+        Representação do procedimento de buffer temporal para evitar vazamento temporal. 
+        A partir do jogo-alvo na data $T$, define-se a "data segura" em $T-24$ h. 
+        Filtram-se nas bases de Partidas e de Estatísticas de Jogadores apenas registros 
+        anteriores a essa data. Os atributos do jogo-alvo são construídos somente com 
+        informações disponíveis até $T-1$ dia. Nenhum dado de $T$ ou do futuro é utilizado.
+        
+        \vspace{1mm}
+        \textit{Fonte:} Elaboração própria (2025)
     }
-    \caption{Tratamento de vazamento temporal: buffer de 24h na engenharia de atributos e embargo de 24h na validação.}
-    \label{fig:uml_atividade_vazamento}
-    \caption*{Fonte: elaboração própria.}
+    \label{fig:buffer-temporal}
 \end{figure}
 
-% --- Figura 2: Sequência (detalhe da dobra com embargo)
 \begin{figure}[H]
     \centering
-    % The source UML is provided as .puml; try common exported formats first, otherwise show placeholder
-    \IfFileExists{umls/embargo.pdf}{%
-        \includegraphics[width=\linewidth]{umls/embargo.pdf}
-    }{%
-        \IfFileExists{umls/embargo.png}{%
-            \includegraphics[width=\linewidth]{umls/embargo.png}
-        }{%
-            \fbox{\parbox{0.95\linewidth}{\centering UML source found: \texttt{umls/embargo.puml}. No PDF/PNG exported. Please render the diagram (e.g., PlantUML) to \texttt{umls/embargo.pdf} or \texttt{umls/embargo.png}.}}
-        }
+    \caption{Embargo na validação cruzada temporal.}
+    \includegraphics[width=0.65\textwidth]{umls/embargo.png}
+    \caption*{
+        \small
+        Legenda: esquema do embargo para evitar vazamento temporal. Em cada dobra define-se a janela de teste [T .. T{+}k] e aplica-se um embargo de 24 horas imediatamente anterior a T. O treino usa apenas registros com data < T - 24 h. A validação usa registros em [T .. T{+}k]. O processo se repete para todas as dobras.
+        
+        \textit{Fonte:} Elaboração própria (2025)
     }
-    \caption{Dobra temporal com embargo: geração de índices de treino/validação e avaliação do modelo.}
-    \label{fig:uml_seq_embargo}
-    \caption*{Fonte: elaboração própria.}
-\end{figure}
-
-% --- Figura 3: Classes (componentes que aplicam o controle temporal)
-\begin{figure}[H]
-    \centering
-    \IfFileExists{img/uml_classes_temporal.pdf}{%
-        \includegraphics[width=\linewidth]{img/uml_classes_temporal.pdf}
-    }{%
-        \IfFileExists{img/uml_classes_temporal.png}{%
-            \includegraphics[width=\linewidth]{img/uml_classes_temporal.png}
-        }{%
-            \fbox{\parbox{0.95\linewidth}{\centering Missing image: \texttt{img/uml\_classes\_temporal.pdf/png}. Please generate from the UML source in the \texttt{umls/} folder.}}
-        }
-    }
-    \caption{Componentes de controle temporal no pipeline: \texttt{safe\_temporal\_filter}, \texttt{TemporalValidator} e \texttt{FeatureBuilder}.}
-    \label{fig:uml_classes_temporal}
-    \caption*{Fonte: elaboração própria.}
+    \label{fig:embargo-temporal}
 \end{figure}
 
 \section{Dataset de Jogos}
@@ -691,50 +664,73 @@ O segundo conjunto de dados oferece uma visão granular do desempenho individual
     \item \texttt{plusMinus}: Saldo de pontos da equipe enquanto o jogador esteve em quadra (pode ser formato texto ou numérico).
 \end{itemize}
 
-Este dataset é a fonte primária para a engenharia de atributos relacionados ao desempenho recente dos jogadores e das equipes, permitindo calcular médias ponderadas, consistência e outras métricas avançadas que alimentam o modelo preditivo.
+Este dataset é a fonte primária para a engenharia de atributos relacionados ao desempenho recente dos jogadores e das equipes, permitindo calcular médias ponderadas, consistência e outras métricas que alimentam o modelo.
 
-Combinados, esses dois datasets fornecem uma base sólida e detalhada para a modelagem. O dataset de jogos estabelece o resultado e o contexto de cada evento, enquanto o dataset de jogadores permite a análise do desempenho que levou a esse resultado. A estrutura relacional, unida pelo \texttt{game\_id}, possibilita a criação de atributos complexos que consideram tanto o histórico das equipes quanto a performance individual recente dos atletas.
+Combinados, esses dois datasets fornecem uma base detalhada para a modelagem. O dataset de jogos estabelece o resultado e o contexto de cada evento, enquanto o dataset de jogadores permite a análise do desempenho que levou a esse resultado. A estrutura relacional, unida pelo id da partida, possibilita a criação de atributos que consideram tanto o histórico das equipes quanto a performance individual recente dos atletas.
 
-A etapa de engenharia de atributos (\textit{feature engineering}) é crucial para transformar os dados brutos coletados e tratados em variáveis preditivas informativas que possam ser efetivamente utilizadas pelo modelo de \textit{machine learning}. O objetivo principal foi criar atributos que capturassem não apenas o desempenho médio histórico das equipes e jogadores, mas também a dinâmica temporal, a forma recente, a consistência, o contexto do calendário e as interações específicas de cada confronto.
+A etapa de engenharia de atributos (\textit{feature engineering}) é importante para transformar os dados brutos coletados e tratados em variáveis preditivas informativas que possam ser efetivamente utilizadas pelo modelo. O objetivo principal foi criar atributos que capturassem não apenas o desempenho médio histórico das equipes e jogadores, mas também a dinâmica temporal, a forma recente, a consistência, o contexto do calendário e as interações específicas de cada confronto.
 
-Para cada jogo no dataset, um conjunto rico de atributos foi calculado com base estritamente nos dados históricos disponíveis até o dia anterior à partida, garantindo a prevenção de vazamento temporal através da função \texttt{safe\_temporal\_filter}, conforme detalhado no Capítulo 3. A função principal orquestradora dessa lógica foi a \texttt{calculate\_advanced\_features\_with\_players}.
+Para cada jogo no dataset, um conjunto de atributos foi calculado com base estritamente nos dados históricos disponíveis até o dia anterior à partida, garantindo a prevenção de vazamento temporal através da função, conforme detalhado no Capítulo 3.
 
-\chapter{Engenharia de Features}
+\section{Engenharia de Features}
 
-A etapa de engenharia de atributos (\textit{feature engineering}) é crucial para transformar os dados brutos coletados e tratados em variáveis preditivas informativas que possam ser efetivamente utilizadas pelo modelo de \textit{machine learning}. O objetivo principal foi criar atributos que capturassem não apenas o desempenho médio histórico das equipes e jogadores, mas também a dinâmica temporal, a forma recente, a consistência, o contexto do calendário e as interações específicas de cada confronto.
+A etapa de engenharia de atributos (\textit{feature engineering}) é importante para transformar os dados brutos coletados e tratados em variáveis preditivas informativas que possam ser efetivamente utilizadas pelo modelo. O objetivo principal foi criar atributos que capturassem não apenas o desempenho médio histórico das equipes e jogadores, mas também a dinâmica temporal, a forma recente, a consistência, o contexto do calendário e as interações específicas de cada confronto.
 
-\section{Atributos Baseados no Histórico de Jogos}
+\subsection{Atributos Baseados no Histórico de Jogos}
 
 Para refletir o desempenho recente das equipes de forma mais precisa do que médias móveis simples, foram implementadas duas técnicas principais: a Janela Temporal Ótima (OTW) e a Ponderação Exponencial Dinâmica.
 
-\subsection{Janela Temporal Ótima (OTW)}
+\subsubsection{Janela Temporal Ótima (OTW)}
 A OTW determina dinamicamente o número de jogos passados ($N$) a serem considerados para cada equipe antes de uma partida específica. A janela base é de 10 jogos, com limites mínimo de 5 e máximo de 20. Esse tamanho é ajustado heuristicamente com base em:
 \begin{itemize}[noitemsep, topsep=0pt]
-    \item \textbf{Fase da Temporada:} Janelas menores no início da temporada (menos de 30 dias) e ligeiramente maiores no final (mais de 150 dias).
-    \item \textbf{Volatilidade Recente:} Medida pelo coeficiente de variação do \textit{net rating} nos últimos 10 jogos. Alta volatilidade ($>$ 1.5) reduz a janela, enquanto baixa volatilidade ($<$ 0.5) a aumenta.
-    \item \textbf{Mudanças no Elenco:} Se a função \texttt{detect\_roster\_change} identifica uma alteração significativa nos 8 principais jogadores (baseado em minutos) nas últimas duas semanas (sobreposição $<$ 70\%), a janela é reduzida ao mínimo (5 jogos).
-    \item \textbf{Densidade de Jogos:} Muitos jogos na última semana ($\ge 4$) reduzem a janela; poucos jogos ($\le 1$) a aumentam.
-    \item \textbf{Mudança de Performance:} Compara o \textit{net rating} médio na janela atual com o período anterior de mesmo tamanho. Uma diferença grande ($>$ 10 pontos) sugere uma mudança de fase e encurta a janela.
+    \item Fase da Temporada: janelas menores no início da temporada (menos de 30 dias) e ligeiramente maiores no final (mais de 150 dias).
+    \item Volatilidade Recente: medida pelo coeficiente de variação do \textit{net rating} nos últimos 10 jogos. Alta volatilidade ($>$ 1.5) reduz a janela, enquanto baixa volatilidade ($<$ 0.5) a aumenta.
+    \item Trocas na rotação: quando há alteração relevante entre os oito jogadores mais utilizados nas duas semanas anteriores (sobreposição inferior a 70\%), a janela é reduzida ao mínimo de 5 jogos.
+    \item Densidade de Jogos: muitos jogos na última semana ($\ge 4$) reduzem a janela; poucos jogos ($\le 1$) a aumentam.
+    \item Mudança de Performance: compara o \textit{net rating} médio na janela atual com o período anterior de mesmo tamanho. Uma diferença grande ($>$ 10 pontos) sugere uma mudança de fase e encurta a janela.
 \end{itemize}
 
-Para cada confronto, a menor OTW calculada entre a equipe mandante e a visitante (\texttt{actual\_window}) é utilizada para garantir que ambos os times sejam avaliados sobre um histórico recente comparável em termos de número de jogos.
 
-\subsection{Ponderação Exponencial Dinâmica}
-Dentro da OTW selecionada, nem todos os jogos têm a mesma relevância. Jogos mais recentes e jogos de equipes com desempenho mais estável são considerados mais preditivos. A função \texttt{calculate\_dynamic\_weights} implementa um esquema de ponderação de decaimento exponencial, onde o peso $w_i$ de um jogo $i$ ocorrido $d_i$ dias antes da data de referência (data do jogo a ser previsto) é dado por:
-$$ w_i \propto \exp(-\lambda \cdot d_i) $$
-A taxa de decaimento $\lambda$ é adaptativa, modulada pela volatilidade recente ($\sigma$) do \textit{net rating} da equipe: $\lambda = 0.05 \times (1 + \sigma / 10)$. Times mais instáveis (maior $\sigma$) recebem um $\lambda$ maior, resultando em um decaimento mais rápido do peso dos jogos antigos. Os pesos são normalizados para somar 1.
+Para cada confronto, adota-se como janela efetiva a menor OTW entre a equipe mandante e a visitante. Essa escolha garante que ambas sejam avaliadas com históricos recentes de tamanho comparável, evitando distorções por janelas desbalanceadas.
 
-Todas as métricas de desempenho baseadas no histórico de jogos (e.g., média de pontos, taxa de vitórias) foram calculadas utilizando médias e desvios padrão ponderados (\texttt{wavg}, \texttt{wstd}) com esses pesos dinâmicos.
 
-\subsection{Atributos Gerados do Histórico}
-Utilizando a OTW e a ponderação dinâmica, os seguintes atributos foram calculados para cada equipe (mandante e visitante):
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{umls/otw.png}
+    \caption{Fluxo de cálculo da Janela Temporal Ótima (OTW) por time}
+    \caption*{
+        \small
+        \textbf{Parâmetros}: MIN=5, BASE=10, MAX=20 jogos.\par
+        \textbf{Fase da temporada}: início~(<30 dias) usa janela menor; final~(>150 dias) levemente maior.\par
+        \textbf{Volatilidade (CV)}: coeficiente de variação do \textit{net rating} nos últimos 10 jogos; CV>1{,}5 reduz a janela; CV<0{,}5 aumenta.\par
+        \textbf{Mudança de rotação}: sobreposição $<70\%$ entre os 8 jogadores com mais minutos nas últimas 2 semanas $\Rightarrow$ janela mínima.\par
+        \textbf{Densidade de jogos (7 dias)}: $\geq 4$ jogos reduz; $\leq 1$ jogo aumenta.\par
+        \textbf{Mudança de performance}: $|\overline{NR}_{\text{recente}}-\overline{NR}_{\text{anterior}}|>10$ pontos reduz a janela.\par
+        \textbf{Saída}: $window$ inteiro após ajustes.
+        
+        \vspace{1mm}
+        \textit{Fonte:} Elaboração própria (2025)
+    }
+    \label{fig:otw-calculo-time}
+\end{figure}
+
+\subsubsection{Ponderação Exponencial Dinâmica}
+Dentro da OTW selecionada, nem todos os jogos têm a mesma relevância: partidas mais recentes e equipes mais estáveis tendem a ser mais preditivas. Adota-se um esquema de ponderação por decaimento exponencial, em que o peso \(w_i\) de um jogo \(i\), ocorrido \(d_i\) dias antes da data de referência, é dado por
+\[
+w_i \propto \exp(-\lambda\, d_i).
+\]
+A taxa de decaimento \(\lambda\) é adaptativa e modulada pela volatilidade recente \((\sigma)\) do \textit{net rating} da equipe: \(\lambda = 0{,}05\, (1 + \sigma/10)\). Times mais instáveis (maior \(\sigma\)) recebem um \(\lambda\) maior, de modo que os jogos antigos perdem influência mais rapidamente. Os pesos são normalizados para somar 1. Todas as métricas baseadas no histórico (por exemplo, médias e desvios padrão) são calculadas de forma ponderada por esses pesos dinâmicos.
+
+\subsubsection{Atributos Derivados do Histórico}
+Com a OTW e a ponderação dinâmica, foram calculados, para mandante e visitante, os seguintes atributos:
 \begin{itemize}[noitemsep, topsep=0pt]
-    \item \textbf{Desempenho Geral:} \texttt{win\_rate}, \texttt{avg\_points}, \texttt{avg\_points\_allowed}, \texttt{net\_rating}.
-    \item \textbf{Sequências:} \texttt{streak} (sequência atual de vitórias/derrotas consecutivas).
-    \item \textbf{Momentum:} \texttt{momentum} (saldo de vitórias/derrotas nos últimos 3 jogos).
-    \item \textbf{Volatilidade:} \texttt{score\_volatility} (desvio padrão ponderado dos pontos marcados).
-    \item \textbf{Desempenho Casa/Fora:} Para os últimos 15 jogos em casa (mandante) ou fora (visitante), calculou-se a taxa de vitória e médias de pontos marcados/sofridos (\texttt{team\_home\_win\_rate}, \texttt{team\_away\_win\_rate}, etc.).
+    \item desempenho geral: taxa de vitórias, média de pontos marcados, média de pontos sofridos e saldo de pontos (\textit{net rating});
+    \item sequências recentes: comprimento da sequência atual de vitórias ou derrotas consecutivas;
+    \item \textit{momentum} de curto prazo: saldo de vitórias nos três jogos mais recentes;
+    \item volatilidade ofensiva: desvio padrão ponderado dos pontos marcados na janela;
+    \item eficácia casa/fora: nos últimos 15 jogos em casa (mandante) ou fora (visitante), taxa de vitória e médias de pontos marcados e sofridos.
 \end{itemize}
+
 
 \section{Atributos Baseados em Estatísticas de Jogadores}
 

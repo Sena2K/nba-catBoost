@@ -1,0 +1,43 @@
+@startuml
+title OTW — Cálculo por Time (com clamp final)
+
+start
+:Definir limites\nMIN=5, BASE=10, MAX=20;
+:window = BASE;
+:jd = nº de jogos disponíveis;
+
+if (Fase da temporada?) then (início < 30 dias)
+  :window = max(MIN, 8);
+elseif (final > 150 dias)
+  :window = min(MAX, 15);
+else
+  :window = BASE;
+endif
+
+if (Volatilidade recente do net rating\n(CV nos últimos 10 jogos)) then (CV > 1,5)
+  :window = max(MIN, window - 3);
+elseif (CV < 0,5)
+  :window = min(MAX, window + 2);
+endif
+
+if (Mudança relevante na rotação em 14 dias?\n(sobreposição dos 8 mais < 70%)) then (sim)
+  :window = MIN;
+endif
+
+if (Densidade de jogos na última semana) then (>= 4 jogos)
+  :window = max(MIN, window - 2);
+elseif (<= 1 jogo)
+  :window = min(MAX, window + 2);
+endif
+
+if (Mudança de performance?\n|média recente − anterior| > 10 pts) then (sim)
+  :window = max(MIN, window - 2);
+endif
+
+' ---- Normalização/Clamps finais ----
+:window = inteiro(window);
+:window = max(MIN, min(MAX, window));
+:window = min(window, jd);
+
+stop
+@enduml

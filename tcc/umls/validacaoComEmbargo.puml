@@ -1,0 +1,25 @@
+@startuml
+hide circle
+skinparam classAttributeIconSize 0
+
+class Jogo {
+  +game_id: string
+  +date: datetime
+  +home_team: string
+  +visitor_team: string
+  +home_score: int
+  +visitor_score: int
+}
+
+class EstatisticaJogador {
+  +game_id: string
+  +date: datetime
+  +team_code: string
+  +player_id: int
+  +player_name: string
+  +min: string
+  +points: int
+}
+
+Jogo "1" -- "0..*" EstatisticaJogador : game_id
+@enduml
