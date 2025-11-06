@@ -894,7 +894,65 @@ Essa demonstração ilustra como o método pode ser operado em ambiente real. O 
 \label{fig:cenario_uso_sequencia}
 \end{figure}
 
+\section{Calibração de Probabilidades}
 
+Além de avaliar a capacidade discriminativa do modelo (AUC-ROC), é fundamental garantir que as probabilidades previstas sejam confiáveis. Modelos de \textit{gradient boosting}, embora potentes, podem gerar probabilidades "brutas" que não refletem perfeitamente a verdadeira chance de ocorrência do evento. Por exemplo, o modelo pode sistematicamente superestimar ou subestimar as chances do time da casa.
+
+\subsection{Detecção de Viés}
+Como primeira etapa, foi realizada uma análise de viés nas previsões brutas do modelo. Verificou-se a proporção de jogos no conjunto de teste para os quais o modelo atribuiu uma probabilidade de vitória ao mandante superior a 50\%. Foi estabelecido um limiar de tolerância (entre 45\% e 65\%) para essa proporção.
+
+O modelo bruto demonstrou um viés de +12\% (tendência a prever vitórias do time da casa com mais frequência do que o observado). Dado que este percentual excedeu o limiar de tolerância, um processo de calibração foi considerado necessário para corrigir essa distorção.
+
+\subsection{Calibração Isotônica}
+Empregou-se a Regressão Isotônica, um método não-paramétrico que ajusta as probabilidades brutas do modelo para que correspondam melhor às frequências reais observadas. Para evitar vazamento de dados, o calibrador foi treinado utilizando-se uma fatia de 15\% dos dados mais recentes do conjunto de treinamento, que não foi utilizada para o treinamento do modelo principal (método \textit{prefit}).
+
+A eficácia da calibração foi medida pela melhoria no \textit{Brier Score} (que penaliza previsões de probabilidade imprecisas) e pela redução do viés:
+\begin{itemize}
+    \item \textbf{Antes (Bruto):} Viés de +12.0\%, Brier Score = 0.234
+    \item \textbf{Depois (Calibrado):} Viés de -1.0\%, Brier Score = 0.198
+\end{itemize}
+
+O processo de calibração isotônica reequilibrou as previsões e melhorou significativamente a qualidade das probabilidades. A curva do modelo bruto (Sem Cal.) é visivelmente desalinhada da diagonal perfeita, enquanto a curva calibrada (Com Cal.) se aproxima dela, confirmando que as probabilidades finais são mais confiáveis.
+
+FIGURAaaaaaaaaaaaaaaaaaaaa
+
+\section{Operação Prospectiva e Pipeline de Produção}
+\label{sec:pipeline}
+
+Para que o modelo preditivo tenha utilidade prática, é fundamental sua integração em um \textit{pipeline} operacional capaz de gerar previsões para jogos futuros (prospectivos). Esta seção descreve a arquitetura desse \textit{pipeline} e a metodologia heurística desenvolvida para estimar a disponibilidade dos atletas antes das partidas.
+
+\subsection{Pipeline de Produção Diário}
+Foi desenhado um fluxo de trabalho automatizado para ser executado diariamente, garantindo que as previsões sejam baseadas nas informações mais recentes disponíveis. O processo é dividido em etapas críticas, orquestradas em momentos específicos antes do início das partidas:
+
+\begin{description}[style=standard, leftmargin=1.5cm, labelwidth=1cm, labelsep=0.5cm]
+    \item[T-24h (Atualização de Dados)] Inicia-se a coleta de dados históricos dos jogos ocorridos nas últimas 24 horas, bem como a execução do \textit{web scraping} para obtenção dos relatórios de lesões mais recentes. Todos os novos dados são processados e armazenados, respeitando o \textit{buffer} temporal de um dia para evitar vazamentos.
+    
+    \item[T-12h (Engenharia de Atributos)] Para cada partida agendada no dia corrente, o sistema calcula o vetor de atributos completo. Este processo inclui a determinação da Janela Temporal Ótima (OTW) para cada equipe e a agregação ponderada das estatísticas de desempenho dos jogadores, gerando o \textit{feature vector} final.
+    
+    \item[T-2h (Geração da Previsão)] O modelo CatBoost treinado, juntamente com seu calibrador isotônico, é carregado. O vetor de atributos gerado na etapa anterior é utilizado para realizar a inferência, e a probabilidade de vitória resultante é armazenada em um banco de dados para consulta.
+    
+    \item[T-60min (Revalidação de Elenco)] Um processo final de verificação dos relatórios de lesões é executado para capturar mudanças de última hora (por exemplo, um titular previamente listado como "provável" torna-se "fora"). Caso uma mudança crítica seja detectada, os atributos relacionados ao elenco são recalculados e a previsão é atualizada.
+\end{description}
+
+\subsection{Função de Estimativa de Elenco}
+Um dos maiores desafios na previsão de jogos é a incerteza sobre a escalação titular, que na maioria das vezes apenas é confirmada minutos antes da partida. Para contornar essa limitação e permitir o cálculo de atributos dependentes do elenco, foi desenvolvida uma função heurística para estimar a escalação provável.
+
+Esta função é executada para cada time em uma data futura (T) e segue uma lógica de priorização baseada em dados recentes e disponibilidade:
+
+\begin{enumerate}
+    \item \textbf{Análise de Minutos:} Calcula-se a média ponderada de minutos jogados por cada atleta da equipe nos últimos 30 dias de jogos.
+    \item \textbf{Verificação de Lesões:} O relatório de lesões mais recente (obtido em T-24h) é integrado. Jogadores listados como "Fora" (\textit{Out}) ou "Duvidoso" (\textit{Doubtful}) recebem uma forte penalização ou são removidos da seleção de titulares.
+    \item \textbf{Seleção Primária:} Os jogadores em condições de jogar são ordenados pela média ponderada de minutos, e os cinco primeiros são selecionados como candidatos principais.
+    \item \textbf{Cobertura Posicional:} O sistema verifica se a seleção primária possui uma cobertura posicional mínima (pelo menos um jogador de garrafão, como \textit{Center} ou \textit{Power Forward}). Caso contrário, o jogador de menor minuto entre os cinco é substituído pelo jogador saudável subsequente que melhor preencha a lacuna posicional.
+    \item \textbf{Ajustes de Fadiga:} Jogadores em situação de \textit{back-to-back} (B2B) que tiveram uma carga de minutos excessivamente alta no dia anterior podem receber uma penalidade em sua prioridade.
+    \item \textbf{Desempate:} Critérios secundários, como eficiência (\textit{Player Efficiency Rating}) ou \textit{plus-minus} recente, são usados como critério de desempate, se necessário.
+\end{enumerate}
+
+Essa abordagem heurística permite que o modelo gere atributos de elenco robustos, mesmo na ausência da confirmação oficial, baseando-se nos padrões recentes de rotação da equipe e nas informações de saúde disponíveis.
+
+\subsection{Síntese da Pipeline}
+
+FIGURAAA
 
 % ========================================================================
 % CAPÍTULO 4: TESTES E RESULTADOS
@@ -1209,4 +1267,5 @@ Por conta de limitações impostas no projeto para poder ser desenvolvido no tem
 \postextual
 \bibliographystyle{abntex2-alf}
 \bibliography{tcc/bibliografia}
+
 \end{document}
