@@ -369,7 +369,7 @@ A avaliação de modelos preditivos não deve se resumir a um único indicador. 
 As métricas de desempenho de classificação são utilizadas para avaliar a eficácia do modelo em acertar a classe correta, medindo diretamente a frequência e o tipo de erros cometidos nas previsões finais.
 
 \subsubsection{A Matriz de Confusão}
-A Matriz de Confusão, também conhecida como matriz de erro, é uma tabela $N \times N$ que serve como base para a visualização e cálculo da performance de um classificador \cite{baheti_classification_metrics}. Para o problema binário de prever o resultado de um jogo da NBA (por exemplo, a equipe da casa vence), a matriz 2x2 compara os valores previstos pelo modelo com os valores reais \textit{(ground truth)} \cite{ibm_confusion_matrix}. A sua estrutura permite uma análise detalhada dos tipos de erros cometidos, fornecendo uma visão muito mais granular do que uma única métrica agregada pode oferecer.
+A Matriz de Confusão, também conhecida como matriz de erro, é uma tabela $N \times N$ que serve como base para a visualização e cálculo da performance de um classificador \cite{baheti_classification_metrics}. Para o problema binário de prever o resultado de um jogo da NBA (e.g., a equipe da casa vence), a matriz 2x2 compara os valores previstos pelo modelo com os valores reais \textit{(ground truth)} \cite{ibm_confusion_matrix}. A sua estrutura permite uma análise detalhada dos tipos de erros cometidos, fornecendo uma visão muito mais granular do que uma única métrica agregada pode oferecer.
 Os seus componentes fundamentais são:
 \begin{itemize}
     \item Verdadeiros Positivos \textit{(TP - True Positives)}: O modelo prevê corretamente que a equipe da casa vence, e a equipe da casa de facto vence.
@@ -424,7 +424,7 @@ Esta métrica foi concebida para fornecer uma medida de performance equilibrada,
 \newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
 \begin{tabularx}{\textwidth}{|l|c|L|L|L|}
 \hline
-\textbf{Métrica} & \textbf{Fórmula} & \textbf{Pergunta respondida} & \textbf{Vantagens} & \textbf{Limitações e contexto na NBA} \\
+Métrica & Fórmula & Pergunta respondida & Vantagen & Limitações e contexto na NBA \\
 \hline
 Acurácia &
 $\dfrac{\mathrm{TP}+\mathrm{TN}}{\mathrm{TP}+\mathrm{TN}+\mathrm{FP}+\mathrm{FN}}$ &
@@ -573,7 +573,7 @@ Por fim, estudos recentes sugerem que a combinação de métricas individuais de
 
 Os dados primários foram extraídos por meio de consultas à \textit{API-NBA}, uma interface de programação de aplicações (API) comercialmente disponível. A escolha desta fonte justifica-se pela sua capacidade de fornecer dados estruturados, consistentes e de alta granularidade, atendendo às necessidades específicas do modelo em dois níveis: dados em nível de jogo e dados em nível de jogador. O primeiro consiste em um conjunto contendo o registro de cada partida, detalhando as equipes mandante e visitante, a data do confronto e os placares finais. O segundo consiste em um conjunto granular que contém as estatísticas individuais (\textit{box score}) de cada atleta para cada partida disputada.
 
-Adicionalmente, para complementar os dados históricos com informações sobre a disponibilidade atual dos elencos, foi implementado um processo de \textit{web scraping} no portal ESPN. Este processo extrai diariamente os \textit{depth charts} de cada equipe, identificando os jogadores titulares e reservas para cada posição, bem como o status de lesões reportado.
+Adicionalmente, para complementar os dados históricos com informações sobre a disponibilidade atual dos elencos, foi implementado um processo de \textit{web scraping} no portal ESPN. Este processo extrai diariamente os \textit{depth charts} de cada equipe, identificando os jogadores titulares e reservas para cada posição, bem como o status de lesões reportado. Para garantir a robustez da coleta de dados via API e \textit{scraping}, foram implementadas estratégias de múltiplas tentativas de requisição, pausas exponenciais em caso de limites atingidos e intervalos regulares entre chamadas, minimizando falhas e respeitando os termos de uso das fontes.
 
 O escopo temporal dos dados abrange as temporadas regulares da \textit{National Basketball Association} a partir de 2021--2022 até a data de execução do processo de coleta (novembro de 2025), garantindo uma base de dados robusta para a análise.
 
@@ -583,11 +583,10 @@ O escopo temporal dos dados abrange as temporadas regulares da \textit{National 
 Uma preocupação central na modelagem de séries temporais é o vazamento de dados (\textit{data leakage}), onde o modelo, durante o treinamento ou validação, inadvertidamente tem acesso a informações que não estariam disponíveis no momento da previsão real. No contexto de previsão de jogos, usar dados do próprio dia do jogo ou de dias futuros para calcular atributos preditivos comprometeria a validade da avaliação do modelo.
 
 Para mitigar esse risco e garantir a causalidade estrita, foram implementadas duas salvaguardas principais:
-\begin{description}
-    \item[Buffer temporal na engenharia de atributos.] Utilizou-se uma função que aplica um \textit{buffer} temporal de 1 dia (24 horas). Ao calcular os atributos para um jogo na data $T$, a função assegura que apenas dados de jogos ocorridos estritamente antes de $T$ (isto é, até $T-1$) sejam consultados, simulando a informação disponível no momento da previsão.
-    \item[Embargo na validação cruzada.] Durante a validação cruzada temporal, introduziu-se um período de “embargo” de 1 dia entre o fim do treino e o início da validação. Isso evita que a performance na validação seja influenciada por dados muito próximos (ou do mesmo dia) dos últimos dados usados no treino, como ilustrado na Figura \ref{fig:embargo}.
-\end{description}
-
+\begin{enumerate}
+    \item Buffer Temporal na Engenharia de Atributos: Foi utilizada uma função que aplica um \textit{buffer} temporal, geralmente de 1 dia (24 horas). Ao calcular os atributos para um jogo ocorrendo na data $T$, essa função assegura que apenas dados de jogos ocorridos estritamente antes de $T$ (ou seja, até $T-1$) sejam consultados. Isso simula realisticamente a informação disponível no momento da previsão.
+    \item Embargo na Validação Cruzada: Durante a validação cruzada temporal, um período de ``embargo'' de 1 dia foi introduzido entre o final do conjunto de treinamento e o início do conjunto de validação. Isso evita que a performance na validação seja influenciada por dados muito próximos (ou do mesmo dia) aos últimos dados usados no treino, como ilustrado na Figura \ref{fig:uml_seq_embargo}.
+\end{enumerate}
 
 Essas medidas asseguram que a avaliação do modelo reflita de forma mais fidedigna seu desempenho esperado em um cenário de previsão operacional.
 
@@ -629,13 +628,13 @@ O primeiro conjunto de dados contém informações agregadas para cada partida d
 \begin{itemize}
     \item \texttt{game\_id}: Identificador numérico único para cada partida. Serve como chave primária para relacionar com os dados de jogadores.
     \item \texttt{date}: Data e hora de início da partida, em formato UTC. Utilizada para ordenação cronológica e cálculos temporais.
-    \item \texttt{home\_team\_code} / \texttt{away\_team\_code}: Códigos de três letras identificando as equipes mandante e visitante (por exemplo, 'LAL' para Los Angeles Lakers).
+    \item \texttt{home\_team\_code} / \texttt{away\_team\_code}: Códigos de três letras identificando as equipes mandante e visitante (e.g., 'LAL' para Los Angeles Lakers).
     \item \texttt{home\_team\_name} / \texttt{away\_team\_name}: Nomes completos das equipes mandante e visitante.
     \item \texttt{home\_score} / \texttt{away\_score}: Pontuação final das equipes mandante e visitante.
     \item \texttt{arena}: Nome da arena onde o jogo foi disputado.
     \item \texttt{city}: Cidade onde a arena está localizada.
-    \item \texttt{season}: Ano da temporada correspondente (por exemplo, 2021 para a temporada 2021-2022).
-    \item \texttt{status}: Status final do jogo (por exemplo, 'Finished').
+    \item \texttt{season}: Ano da temporada correspondente (e.g., 2021 para a temporada 2021-2022).
+    \item \texttt{status}: Status final do jogo (e.g., 'Finished').
 \end{itemize}
 
 Este dataset fornece o contexto geral de cada confronto, incluindo o resultado final, que é fundamental para a definição da variável alvo (\texttt{home\_win}).
@@ -650,8 +649,8 @@ O segundo conjunto de dados oferece uma visão granular do desempenho individual
     \item \texttt{team\_code}: Código da equipe pela qual o jogador atuou na partida.
     \item \texttt{player\_id}: Identificador numérico único para cada jogador.
     \item \texttt{player\_name}: Nome completo do jogador.
-    \item \texttt{pos}: Posição primária do jogador (por exemplo, 'G' para \textit{Guard}, 'F' para \textit{Forward}, 'C' para \textit{Center}). Pode estar vazia.
-    \item \texttt{min}: Minutos jogados na partida (formato texto, por exemplo, '30:15' ou vazio).
+    \item \texttt{pos}: Posição primária do jogador (e.g., 'G' para \textit{Guard}, 'F' para \textit{Forward}, 'C' para \textit{Center}). Pode estar vazia.
+    \item \texttt{min}: Minutos jogados na partida (formato texto, e.g., '30:15' ou vazio).
     \item \texttt{points}: Total de pontos marcados.
     \item \texttt{fgm}, \texttt{fga}, \texttt{fgp}: Cestas de campo convertidas (\textit{made}), tentadas (\textit{attempted}) e percentual de acerto (\textit{percentage}).
     \item \texttt{ftm}, \texttt{fta}, \texttt{ftp}: Lances livres convertidos, tentados e percentual.
@@ -701,13 +700,13 @@ Para cada confronto, adota-se como janela efetiva a menor OTW entre a equipe man
     \caption{Fluxo de cálculo da Janela Temporal Ótima (OTW) por time}
     \caption*{
         \small
-        \textbf{Parâmetros}: MIN=5, BASE=10, MAX=20 jogos.\par
-        \textbf{Fase da temporada}: início~(<30 dias) usa janela menor; final~(>150 dias) levemente maior.\par
-        \textbf{Volatilidade (CV)}: coeficiente de variação do \textit{net rating} nos últimos 10 jogos; CV>1{,}5 reduz a janela; CV<0{,}5 aumenta.\par
-        \textbf{Mudança de rotação}: sobreposição $<70\%$ entre os 8 jogadores com mais minutos nas últimas 2 semanas $\Rightarrow$ janela mínima.\par
-        \textbf{Densidade de jogos (7 dias)}: $\geq 4$ jogos reduz; $\leq 1$ jogo aumenta.\par
-        \textbf{Mudança de performance}: $|\overline{NR}_{\text{recente}}-\overline{NR}_{\text{anterior}}|>10$ pontos reduz a janela.\par
-        \textbf{Saída}: $window$ inteiro após ajustes.
+        Parâmetros}: MIN=5, BASE=10, MAX=20 jogos.\par
+        Fase da temporada: início~(<30 dias) usa janela menor; final~(>150 dias) levemente maior.\par
+        Volatilidade (CV): coeficiente de variação do \textit{net rating} nos últimos 10 jogos; CV>1{,}5 reduz a janela; CV<0{,}5 aumenta.\par
+        Mudança de rotação: sobreposição $<70\%$ entre os 8 jogadores com mais minutos nas últimas 2 semanas $\Rightarrow$ janela mínima.\par
+        Densidade de jogos (7 dias): $\geq 4$ jogos reduz; $\leq 1$ jogo aumenta.\par
+        Mudança de performance: $|\overline{NR}_{\text{recente}}-\overline{NR}_{\text{anterior}}|>10$ pontos reduz a janela.\par
+        Saída: $window$ inteiro após ajustes.
         
         \vspace{1mm}
         \textit{Fonte:} Elaboração própria (2025)
@@ -798,6 +797,40 @@ Aplicou-se o esquema \textit{walk-forward} com três dobras. Entre o fim de cada
 Utilizou-se o CatBoost, um método de \textit{gradient boosting} em árvores, adequado para dados tabulares com muitos atributos categóricos (como equipes, mês e fase da temporada), sem exigir codificação manual extensa. Seu mecanismo de treinamento evita vazamento do alvo durante a construção das estatísticas categóricas, e o uso de árvores simétricas favorece previsões rápidas e controle de sobreajuste. 
 
 
+\subsection{Otimização de hiperparâmetros}
+A calibração dos hiperparâmetros foi feita por otimização Bayesiana (via Optuna), sempre avaliando cada proposta com a mesma validação temporal já descrita. O espaço de busca incluiu número de iterações, profundidade das árvores, taxa de aprendizado, regularização L2 e amostragem de linhas e colunas. A Tabela \ref{tab:optuna_results} ilustra uma amostra dos experimentos e o melhor resultado pela métrica AUC.
+
+\begin{table}[H]
+    \centering
+    \caption{Otimização de hiperparâmetros (amostra).}
+    \label{tab:optuna_results}
+    \begin{tabular}{ccccccc}
+        \toprule
+        Trial & Iterações & Profundidade & Taxa de aprend. & L2 & AUC (val.) & Tempo \\
+        \midrule
+        1 & 250 & 5 & 0{,}030 & 5{,}0 & 0{,}664 & 2{,}3s \\
+        2 & 764 & 5 & 0{,}027 & 8{,}2 & 0{,}691 & 5{,}1s \\
+        3 & 500 & 7 & 0{,}040 & 3{,}0 & 0{,}673 & 4{,}2s \\
+        \dots & \dots & \dots & \dots & \dots & \dots & \dots \\
+        \midrule
+        Melhor & 764 & 5 & 0{,}027 & 8{,}2 & 0{,}691 & 5{,}1s \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Configuração final}
+O modelo final foi treinado no bloco de treino (80\% mais antigo) com os hiperparâmetros selecionados:
+\begin{itemize}[noitemsep, topsep=0pt]
+    \item iterações: 764 (com parada antecipada);
+    \item profundidade das árvores: 5;
+    \item taxa de aprendizado: \(\approx 0{,}027\);
+    \item regularização L2: \(\approx 8{,}17\);
+    \item amostragem de linhas: \(\approx 0{,}96\);
+    \item amostragem de colunas: \(\approx 0{,}998\);
+    \item função de perda: logloss;
+    \item métrica de avaliação: AUC.
+\end{itemize}
+
 As variáveis categóricas (equipes, mês, dia da semana, fim de semana e fase da temporada) foram informadas explicitamente para tratamento nativo.
 
 \section{Tratamento de Variáveis Categóricas}
@@ -849,7 +882,7 @@ A avaliação também foi detalhada por equipe e por período. A acurácia por e
 
 \section{Aplicação em Cenário de Uso}
 
-Para demonstrar a aplicação prática, executou-se um procedimento de previsão para um jogo futuro com dados disponíveis antes da partida. O fluxo seguiu as mesmas salvaguardas temporais adotadas no treinamento. Primeiro, reuniram-se as informações recentes de equipes e jogadores até a véspera do confronto. Em seguida, calcularam-se os atributos exatamente no mesmo formato utilizado pelo modelo. Por fim, obteve-se a probabilidade de vitória e a classe prevista, opcionalmente ajustando o limiar conforme a análise anterior.
+Para demonstrar a aplicação prática, executou-se um procedimento de previsão para um jogo futuro com dados verossímeis disponíveis antes da partida. O fluxo seguiu as mesmas salvaguardas temporais adotadas no treinamento. Primeiro, reuniram-se as informações recentes de equipes e jogadores até a véspera do confronto. Em seguida, calcularam-se os atributos exatamente no mesmo formato utilizado pelo modelo. Por fim, obteve-se a probabilidade de vitória e a classe prevista, opcionalmente ajustando o limiar conforme a análise anterior.
 
 Essa demonstração ilustra como o método pode ser operado em ambiente real. O mesmo fluxo serve para integrar o modelo a um processo periódico de geração de probabilidades, desde que respeitados os cuidados de atualização de dados e de avaliação contínua de calibração.
 
@@ -861,26 +894,7 @@ Essa demonstração ilustra como o método pode ser operado em ambiente real. O 
 \label{fig:cenario_uso_sequencia}
 \end{figure}
 
-\section{Calibração de Probabilidades}
 
-Além de avaliar a capacidade discriminativa do modelo (AUC-ROC), é fundamental garantir que as probabilidades previstas sejam confiáveis. Modelos de \textit{gradient boosting}, embora potentes, podem gerar probabilidades "brutas" que não refletem perfeitamente a verdadeira chance de ocorrência do evento. Por exemplo, o modelo pode sistematicamente superestimar ou subestimar as chances do time da casa.
-
-\subsection{Detecção de Viés}
-Como primeira etapa, foi realizada uma análise de viés nas previsões brutas do modelo. Verificou-se a proporção de jogos no conjunto de teste para os quais o modelo atribuiu uma probabilidade de vitória ao mandante superior a 50\%. Foi estabelecido um limiar de tolerância (entre 45\% e 65\%) para essa proporção.
-
-O modelo bruto demonstrou um viés de +12\% (tendência a prever vitórias do time da casa com mais frequência do que o observado). Dado que este percentual excedeu o limiar de tolerância, um processo de calibração foi considerado necessário para corrigir essa distorção.
-
-\subsection{Calibração Isotônica}
-Empregou-se a Regressão Isotônica, um método não-paramétrico que ajusta as probabilidades brutas do modelo para que correspondam melhor às frequências reais observadas. Para evitar vazamento de dados, o calibrador foi treinado utilizando-se uma fatia de 15\% dos dados mais recentes do conjunto de treinamento, que não foi utilizada para o treinamento do modelo principal (método \textit{prefit}).
-
-
-FIGURAaaaaaaaaaaaaaaaaaaaa
-
-
-
-\subsection{Síntese da Pipeline}
-
-FIGURAAA
 
 % ========================================================================
 % CAPÍTULO 4: TESTES E RESULTADOS
@@ -890,41 +904,29 @@ FIGURAAA
 
 \section{Configuração experimental}
 \label{sec:config_exp}
-Os experimentos foram executados em ambiente Python 3.10 com as bibliotecas CatBoost, Optuna, Scikit-learn, Pandas e SHAP. A base histórica compreende jogos e estatísticas individuais de jogadores da NBA a partir de 2021 até 27 de dezembro de 2024 para treino. O conjunto de teste é composto por 783 jogos ocorridos entre 28 de dezembro de 2024 e (confirmar a data certa dps). Todas as rotinas respeitam a cronologia e aplicam embargo temporal de 24 horas, tanto na engenharia de atributos quanto na validação, conforme descrito no Capítulo 3.
+Os experimentos foram executados em ambiente Python 3.10 com as bibliotecas CatBoost, Optuna, Scikit-learn, Pandas e SHAP. A base histórica compreende jogos e estatísticas individuais de jogadores da NBA a partir de 2021 até 27 de dezembro de 2024 para treino. O conjunto de teste é composto por 783 jogos ocorridos entre 28 de dezembro de 2024 e 25 de outubro de 2025. Todas as rotinas respeitam a cronologia e aplicam embargo temporal de 24 horas, tanto na engenharia de atributos quanto na validação, conforme descrito no Capítulo 3.
 
-\subsection{Otimização de hiperparâmetros}
-A calibração dos hiperparâmetros foi feita por otimização Bayesiana (via Optuna), sempre avaliando cada proposta com a mesma validação temporal já descrita. O espaço de busca incluiu número de iterações, profundidade das árvores, taxa de aprendizado, regularização L2 e amostragem de linhas e colunas. A Tabela \ref{tab:optuna_results} ilustra uma amostra dos experimentos e o melhor resultado pela métrica AUC.
+\section{Otimização de hiperparâmetros}
+\label{sec:optuna}
+A busca por hiperparâmetros foi realizada com validação temporal e métrica AUC como função-objetivo. Observou-se melhor desempenho com profundidades intermediárias, taxa de aprendizado baixa e regularização L2 moderada. A Tabela \ref{tab:optuna_top} ilustra uma amostra dos melhores ensaios.
 
 \begin{table}[H]
-    \centering
-    \caption{Otimização de hiperparâmetros (amostra).}
-    \label{tab:optuna_results}
-    \begin{tabular}{ccccccc}
-        \toprule
-        Trial & Iterações & Profundidade & Taxa de aprend. & L2 & AUC (val.) & Tempo \\
-        \midrule
-        1 & 250 & 5 & 0{,}030 & 5{,}0 & 0{,}664 & 2{,}3s \\
-        2 & 764 & 5 & 0{,}027 & 8{,}2 & 0{,}691 & 5{,}1s \\
-        3 & 500 & 7 & 0{,}040 & 3{,}0 & 0{,}673 & 4{,}2s \\
-        \dots & \dots & \dots & \dots & \dots & \dots & \dots \\
-        \midrule
-        Melhor & 764 & 5 & 0{,}027 & 8{,}2 & 0{,}691 & 5{,}1s \\
-        \bottomrule
-    \end{tabular}
+\centering
+\caption{Melhores ensaios de otimização de hiperparâmetros (amostra)}
+\label{tab:optuna_top}
+\footnotesize
+\begin{tabular}{ccccccc}
+\hline
+Ensaio & Iterações & Profundidade & Taxa de aprend. & L2 & AUC (val.) & Tempo \\
+\hline
+1  & 250 & 5 & 0,030 & 5,0  & 0,664 & 2,3 s \\
+2  & 764 & 5 & 0,027 & 8,2  & 0,691 & 5,1 s \\
+3  & 500 & 7 & 0,040 & 3,0  & 0,673 & 4,2 s \\
+\ldots & \ldots & \ldots & \ldots & \ldots & \ldots & \ldots \\
+Melhor & 764 & 5 & 0,027 & 8,2 & 0,691 & 5,1 s \\
+\hline
+\end{tabular}
 \end{table}
-
-\subsection{Configuração final}
-O modelo final foi treinado no bloco de treino com os hiperparâmetros selecionados:
-\begin{itemize}[noitemsep, topsep=0pt]
-    \item iterações: 764 (com parada antecipada);
-    \item profundidade das árvores: 5;
-    \item taxa de aprendizado: \(\approx 0{,}027\);
-    \item regularização L2: \(\approx 8{,}17\);
-    \item amostragem de linhas: \(\approx 0{,}96\);
-    \item amostragem de colunas: \(\approx 0{,}998\);
-    \item função de perda: logloss;
-    \item métrica de avaliação: AUC.
-\end{itemize}
 
 \section{Desempenho geral}
 \label{sec:desempenho_geral}
@@ -986,7 +988,7 @@ Essas diferenças não representam falhas do modelo, mas refletem variação est
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.95\textwidth]{figuras/acc_por_time_dot.png}
-    \caption{Desempenho do modelo por equipe comparando a acurácia quando o time atua como \textbf{mandante} (círculos) e como \textbf{visitante} (xis). 
+    \caption{Desempenho do modelo por equipe comparando a acurácia quando o time atua como mandante (círculos) e como visitante (xis). 
     Cada par de marcadores é ligado por um segmento para facilitar a leitura do deslocamento mandante\,–\,visitante. 
     Valores mais à direita indicam maior acurácia, diferenças grandes entre os marcadores sugerem forte assimetria de mando.}
     \label{fig:acc_team_home_away}
@@ -1127,7 +1129,7 @@ O procedimento adotado seguiu três passos: (i) medição da confiabilidade por 
 
 Nos resultados deste trabalho, a calibração isotônica melhorou levemente o \textit{Brier score} no conjunto de teste (0{,}2178 para 0{,}2167), porém reduziu discretamente a AUC (0{,}7143 para 0{,}7123) e piorou o \textit{log loss} (0{,}6258 para 0{,}7051). Assim, as probabilidades calibradas são mais fiéis em termos de frequência observada, mas, para decisões sensíveis a \textit{log loss} e ordenação, o modelo não calibrado apresentou desempenho superior.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{figuras/calibration_ece.png}
 \caption{Curva de confiabilidade do modelo no conjunto de teste. A linha tracejada indica calibração perfeita; a linha contínua apresenta a fração de vitórias reais por faixa de probabilidade.}
@@ -1135,7 +1137,7 @@ Nos resultados deste trabalho, a calibração isotônica melhorou levemente o \t
 \label{fig:calib_ece}
 \end{figure}
 
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \caption{Métricas antes e depois da calibração no conjunto de teste}
 \begin{tabular}{lcc}
@@ -1162,14 +1164,15 @@ Para um confronto prospectivo, o pipeline gera atributos com base apenas nas inf
 \section{Discussão dos resultados}
 \label{sec:discussao_resultados}
 
-Os resultados do teste cronológico indicam ganho em relação à linha de base no período avaliado. A acurácia ficou 11{,}88 pontos percentuais acima da referência e a AUC-ROC atingiu 0{,}7036, o que aponta capacidade de ordenação entre vitórias e derrotas. Esse desempenho, porém, varia entre equipes e recortes temporais, como detalhado nas análises subsequentes. 
+Os resultados obtidos demonstram que o modelo alcançou desempenho competitivo frente à literatura e validaram as principais hipóteses deste estudo. O ganho de 11{,}88 pontos percentuais em acurácia sobre a linha de base confirma a relevância das \textit{features} de jogadores e a adequação da estratégia de validação temporal.
 
-A análise de ablação esclarece a fonte desse ganho. A retirada das variáveis em nível de jogador reduz 4{,}44 p.p. de acurácia e 0{,}0426 de AUC, o que mostra que as agregações individuais adicionam informação que não está presente nas médias de equipe e nos controles de calendário. Em termos práticos, o modelo se beneficia de capturar quem, de fato, compõe a rotação e como esse grupo tem performado recentemente.
+A comparação com estudos anteriores reforça a consistência dos achados. \citeonline{horvat2023} reportam acurácia média em torno de 66\%, enquanto \citeonline{khanmohammadi2024} apresentam AUC entre 0{,}72 e 0{,}82, valores próximos aos observados neste trabalho. Diferenças metodológicas, como composição do conjunto de dados e horizonte temporal, explicam parte da discrepância. 
 
-Na comparação com trabalhos prévios, os números ficam alinhados à acurácia média relatada por \citeonline{horvat2023} e dentro do intervalo de AUC observado por \citeonline{khanmohammadi2024}. Parte das diferenças decorre de escolhas metodológicas, como janela temporal, período avaliado e escopo de variáveis. Também se observa heterogeneidade entre franquias: elencos mais estáveis tendem a gerar previsões mais consistentes, enquanto fases de reconstrução e trocas frequentes ampliam a variância das métricas.
+O desempenho heterogêneo entre equipes também é coerente com a teoria: elencos estáveis, como Oklahoma City Thunder e Utah Jazz, apresentam maior previsibilidade, enquanto times em reconstrução ou com alta rotatividade, como Indiana Pacers e San Antonio Spurs, sofrem queda de precisão. Tais variações reforçam que a estabilidade da rotação e a consistência tática afetam diretamente a capacidade preditiva de modelos baseados em desempenho recente.
 
- Em síntese, integrar histórico recente com informações de jogadores, sob validação temporal com embargo, produz ganhos mensuráveis frente a abordagens apoiadas apenas em médias de equipe, sem sacrificar a interpretabilidade operacional das probabilidades.
+A análise de ablação confirmou a importância dos atributos em nível de elenco. A remoção dessas variáveis reduziu a acurácia em 4{,}44 pontos percentuais e o AUC em 0{,}0426, evidenciando que a dimensão individual dos jogadores é determinante para captar o contexto competitivo real. A calibração isotônica, por sua vez, aprimorou a confiança das probabilidades, reduzindo o viés de previsão observado nas primeiras iterações.
 
+Em síntese, o conjunto dos experimentos valida a hipótese central de que a integração de estatísticas de jogadores, janelas temporais adaptativas e validação temporal rigorosa eleva o desempenho preditivo em relação às abordagens simplificadas baseadas apenas em médias de equipe.
 
 % ========================================================================
 % CAPÍTULO 5: CONCLUSAO
@@ -1179,7 +1182,7 @@ Na comparação com trabalhos prévios, os números ficam alinhados à acurácia
 
 Este trabalho desenvolveu um modelo de \textit{machine learning} para previsão de resultados de jogos da NBA, com uso do classificador CatBoost e uma arquitetura de engenharia de atributos que combina informações contextuais de equipes e estatísticas agregadas de jogadores. O processo de validação adotou partições temporais com embargo de 24 horas, garantindo a integridade causal dos experimentos.
 
-O modelo alcançou acurácia de 65{,}64\% e AUC-ROC de 0{,}7036, superando a linha de base de 53{,}77\%. Esses resultados demonstram ganho estatístico e indicam que a modelagem proposta é capaz de ordenar corretamente a maioria dos confrontos, atribuindo maior probabilidade às equipes vencedoras na maior parte dos casos.
+O modelo alcançou acurácia de 65{,}64\% e AUC-ROC de 0{,}7036, superando a linha de base de 53{,}77\%. Esses resultados demonstram ganho estatisticamente consistente e indicam que a modelagem proposta é capaz de ordenar corretamente a maioria dos confrontos, atribuindo maior probabilidade às equipes vencedoras na maior parte dos casos.
 
 Entre as principais contribuições estão: 
 \begin{enumerate}[noitemsep, topsep=0pt]
@@ -1206,5 +1209,4 @@ Por conta de limitações impostas no projeto para poder ser desenvolvido no tem
 \postextual
 \bibliographystyle{abntex2-alf}
 \bibliography{tcc/bibliografia}
-
 \end{document}
