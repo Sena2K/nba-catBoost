@@ -160,23 +160,43 @@
 % LISTA DE ABREVIATURAS E SIGLAS
 % ========================================================================
 \begin{siglas}
-  \item[AI] Artificial Intelligence (Inteligência Artificial)
-  \item[API] Application Programming Interface (Interface de Programação de Aplicações)
-  \item[BPM] Box Plus/Minus
-  \item[EQM] Erro Quadrático Médio
-  \item[IA] Inteligência Artificial
-  \item[JSON] JavaScript Object Notation
-  \item[MDP] Markov Decision Process (Processo de Decisão de Markov)
-  \item[ML] Machine Learning (Aprendizado de Máquina)
-  \item[NBA] National Basketball Association
-  \item[OTW] Optimal Time Window (Janela Temporal Ótima)
-  \item[PER] Player Efficiency Rating
-  \item[SHAP] Shapley Additive Explanations
-  \item[SVM] Support Vector Machine (Máquina de Vetores de Suporte)
-  \item[VORP] Value Over Replacement Player
-  \item[XGBoost] Extreme Gradient Boosting
+\item[AI] Artificial Intelligence (Inteligência Artificial)
+\item[API] Application Programming Interface (Interface de Programação de Aplicações)
+\item[API-NBA] Interface de Programação de Aplicações da NBA
+\item[AUC] Área sob a curva
+\item[AUC-PR] Área sob a curva Precisão–Recall
+\item[AUC-ROC] Área sob a curva ROC
+\item[B2B] Back-to-back
+\item[BPM] Box Plus/Minus
+\item[CV] Coeficiente de variação
+\item[ECE] Erro de calibração esperado
+\item[EQM] Erro Quadrático Médio
+\item[F1] F1-Score
+\item[FN] Falso negativo
+\item[FP] Falso positivo
+\item[FPR] Taxa de falsos positivos
+\item[H2H] Head-to-head
+\item[IA] Inteligência Artificial
+\item[JSON] JavaScript Object Notation
+\item[LightGBM] Light Gradient Boosting Machine
+\item[Log loss] Perda logística
+\item[MDP] Markov Decision Process (Processo de Decisão de Markov)
+\item[ML] Machine Learning (Aprendizado de Máquina)
+\item[NBA] National Basketball Association
+\item[NR] Net rating
+\item[OTW] Optimal Time Window (Janela Temporal Ótima)
+\item[PER] Player Efficiency Rating
+\item[PPV] Valor preditivo positivo
+\item[PR] Precisão–Recall
+\item[ROC] Receiver Operating Characteristic
+\item[SHAP] Shapley Additive Explanations
+\item[SVM] Support Vector Machine (Máquina de Vetores de Suporte)
+\item[TN] Verdadeiro negativo
+\item[TP] Verdadeiro positivo
+\item[TPR] Taxa de verdadeiros positivos
+\item[VORP] Value Over Replacement Player
+\item[XGBoost] eXtreme Gradient Boosting
 \end{siglas}
-
 
 
 % ========================================================================
@@ -281,7 +301,7 @@ Esses algoritmos ajustam seus parâmetros internos para minimizar um erro de pre
 
 Em cada iteração do processo de boosting, um novo modelo é treinado para corrigir os erros do conjunto de modelos anteriores, focando especialmente nas instâncias que foram preditas incorretamente nas etapas precedentes. Diferentemente do \emph{bagging} (onde modelos são treinados em paralelo em subconjuntos aleatórios dos dados), no boosting os modelos são ajustados em sequência adaptativa, de modo que cada modelo adicional concentra-se nos erros do anterior. Essa estratégia iterativa tende a reduzir o viés do modelo e, quando bem regulamentada, produz modelos de alta acurácia em tarefas de classificação e regressão\cite{AWSBoosting}. Um dos primeiros e mais influentes algoritmos dessa família é o AdaBoost (\emph{Adaptive Boosting}), proposto por Freund e Schapire na década de 1990 \cite{Freund1997}.
 
-O AdaBoost foi concebido para problemas de classificação binária e mostrou empiricamente como combinar múltiplos classificadores fracos (por exemplo, árvores de decisão rasas ou \emph{stumps}) pode gerar um classificador forte com desempenho significativamente melhor \cite{Freund1997}. Em cada iteração do AdaBoost, os pesos associados a cada instância de treinamento são ajustados: exemplos que foram classificados incorretamente pelo modelo anterior têm seus pesos aumentados, enquanto exemplos classificados corretamente têm seus pesos reduzidos. Em seguida, um novo classificador fraco é treinado com base nesses pesos ajustados, enfatizando os exemplos difíceis. Cada classificador recebe uma ponderação $\alpha_m$ proporcional à sua performance (tipicamente calculada como uma função do erro de classificação), e a predição final do ensemble é obtida por uma votação ponderada desses classificadores \cite{Freund1997}. Do ponto de vista teórico, demonstra-se que o AdaBoost minimiza aproximadamente uma função de perda exponencial, o que ajuda a explicar seu sucesso em reduzir erros de generalização em diversas aplicações \cite{Schapire2012}. Aplicações típicas do AdaBoost incluem tarefas de classificação em visãocomputacional (por exemplo, detecção de faces) e outras áreas onde a interpretabilidade e a simplicidade dos classificadores fracos são vantajosas, embora hoje existam variantes mais robustas para dados complexos. 
+O AdaBoost foi concebido para problemas de classificação binária e mostrou empiricamente como combinar múltiplos classificadores fracos (por exemplo, árvores de decisão rasas ou \emph{stumps}) pode gerar um classificador forte com desempenho significativamente melhor \cite{Freund1997}. Em cada iteração do AdaBoost, os pesos associados a cada instância de treinamento são ajustados: exemplos que foram classificados incorretamente pelo modelo anterior têm seus pesos aumentados, enquanto exemplos classificados corretamente têm seus pesos reduzidos. Em seguida, um novo classificador fraco é treinado com base nesses pesos ajustados, enfatizando os exemplos difíceis. Cada classificador recebe uma ponderação $\alpha_m$ proporcional à sua performance (tipicamente calculada como uma função do erro de classificação), e a predição final do ensemble é obtida por uma votação ponderada desses classificadores \cite{Freund1997}. Do ponto de vista teórico, demonstra-se que o AdaBoost minimiza aproximadamente uma função de perda exponencial, o que ajuda a explicar seu sucesso em reduzir erros de generalização em diversas aplicações \cite{Schapire2012}. Aplicações típicas do AdaBoost incluem tarefas de classificação em visãocomputacional (por exemplo, detecção de faces) e outras áreas onde a interpretabilidade e a simplicidade dos classificadores fracos são vantajosas, embora hoje existam variantes mais adequadas para dados complexos. 
 
 Outro avanço fundamental foi a introdução do Gradient Boosting (boosting por gradiente), generalizado por Friedman \cite{Friedman2001}. Enquanto o AdaBoost ajusta iterativamente os modelos dando ênfase a erros de classificação, o Gradient Boosting reformula o problema de boosting como a otimização de uma função de perda arbitrária por meio de descida de gradiente em espaço de funções \cite{Friedman2001}. Nessa abordagem, em cada etapa $m$ ajusta-se um novo modelo base $h_m(x)$ para aproximar o gradiente negativo da função de perda (os esíduos) do modelo atual em relação aos dados de treinamento. Em outras palavras, o modelo sequencialmente tenta corrigir os resíduos (erros) do modelo conjunto anterior. Esse framework é bastante flexível: permite usar diferentes funções de perda (ex.: erro quadrático para regressão, deviação binária para classificação) e diferentes modelos base (embora sejam comumente utilizadas árvores de decisão CART de média profundidade como aprendizes fracos).
 
@@ -483,7 +503,7 @@ A Área Sob a Curva (AUC) é uma métrica escalar que resume a curva ROC num ún
 
 A AUC possui uma interpretação estatística particularmente intuitiva e poderosa: é a probabilidade de que o modelo atribua uma pontuação de previsão mais alta a uma instância positiva (uma vitória real) escolhida aleatoriamente do que a uma instância negativa (uma derrota real) escolhida aleatoriamente.
 
-Esta interpretação revela uma propriedade fundamental da AUC: ela mede a qualidade do "ranking" interno do modelo, independentemente dos valores absolutos das probabilidades. Um modelo que atribui uma probabilidade de 0.1 a todas as derrotas e 0.2 a todas as vitórias terá uma AUC perfeita de 1.0, pois consegue separar perfeitamente as classes, embora as probabilidades em si não sejam realistas. A AUC mede, portanto, a capacidade de discriminação ou separação do modelo. Um valor de AUC elevado indica que o modelo aprendeu padrões que distinguem fundamentalmente as vitórias das derrotas. É uma medida robusta da qualidade do "motor" preditivo do modelo, independente de como as suas saídas são calibradas ou de qual limiar de decisão é escolhido, tornando-a uma das métricas mais importantes para comparar o poder preditivo fundamental de diferentes modelos \cite{fawcett2006roc}.
+Esta interpretação revela uma propriedade fundamental da AUC: ela mede a qualidade do "ranking" interno do modelo, independentemente dos valores absolutos das probabilidades. Um modelo que atribui uma probabilidade de 0.1 a todas as derrotas e 0.2 a todas as vitórias terá uma AUC perfeita de 1.0, pois consegue separar perfeitamente as classes, embora as probabilidades em si não sejam realistas. A AUC mede, portanto, a capacidade de discriminação ou separação do modelo. Um valor de AUC elevado indica que o modelo aprendeu padrões que distinguem fundamentalmente as vitórias das derrotas. É uma medida da qualidade do "motor" preditivo do modelo, independente de como as suas saídas são calibradas ou de qual limiar de decisão é escolhido, tornando-a uma das métricas mais importantes para comparar o poder preditivo fundamental de diferentes modelos \cite{fawcett2006roc}.
 
 
 \subsubsection{Métricas de Calibração}
@@ -573,10 +593,9 @@ Por fim, estudos recentes sugerem que a combinação de métricas individuais de
 
 Os dados primários foram extraídos por meio de consultas à \textit{API-NBA}, uma interface de programação de aplicações (API) comercialmente disponível. A escolha desta fonte justifica-se pela sua capacidade de fornecer dados estruturados, consistentes e de alta granularidade, atendendo às necessidades específicas do modelo em dois níveis: dados em nível de jogo e dados em nível de jogador. O primeiro consiste em um conjunto contendo o registro de cada partida, detalhando as equipes mandante e visitante, a data do confronto e os placares finais. O segundo consiste em um conjunto granular que contém as estatísticas individuais (\textit{box score}) de cada atleta para cada partida disputada.
 
-Adicionalmente, para complementar os dados históricos com informações sobre a disponibilidade atual dos elencos, foi implementado um processo de \textit{web scraping} no portal ESPN. Este processo extrai diariamente os \textit{depth charts} de cada equipe, identificando os jogadores titulares e reservas para cada posição, bem como o status de lesões reportado. Para garantir a robustez da coleta de dados via API e \textit{scraping}, foram implementadas estratégias de múltiplas tentativas de requisição, pausas exponenciais em caso de limites atingidos e intervalos regulares entre chamadas, minimizando falhas e respeitando os termos de uso das fontes.
+ Para garantir a consistência da coleta de dados via API e \textit{scraping}, foram implementadas estratégias de múltiplas tentativas de requisição, pausas exponenciais em caso de limites atingidos e intervalos regulares entre chamadas, minimizando falhas e respeitando os termos de uso das fontes.
 
-O escopo temporal dos dados abrange as temporadas regulares da \textit{National Basketball Association} a partir de 2021--2022 até a data de execução do processo de coleta (novembro de 2025), garantindo uma base de dados robusta para a análise.
-
+O escopo temporal dos dados abrange as temporadas regulares da \textit{National Basketball Association} a partir de 2021--2022 até a data de execução do processo de coleta (novembro de 2025), garantindo uma base de dados confiável para a análise.
 
 \section{Tratamento de Vazamento Temporal}
 
@@ -1022,13 +1041,6 @@ Para evitar superinterpretação, as acurácias mensais devem ser acompanhadas d
     \legend{Fonte: elaboração própria (2025).}
 \end{figure}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{figuras/acc_mes_ic.png} 
-    \caption{Evolução da acurácia mensal no conjunto de teste, com faixa sombreada indicando o intervalo de confiança binomial de 95\%. A linha contínua com marcadores representa a acurácia de cada mês e a linha tracejada indica a linha de base (\(\approx 0{,}536\)). Observa-se maior incerteza em meses com amostras menores (faixas mais largas).}
-    \label{fig:acc_mensal_ic95}
-    \legend{Fonte: elaboração própria.}
-\end{figure}
 
 
 \subsection{Análise de limiar de decisão}
@@ -1050,14 +1062,6 @@ Limiar & Acurácia & Precisão & Recall \\
 \hline
 \end{tabular}
 \end{table}
-
-\begin{figure}[H]
-\centering
-\caption{Curva de desempenho por limiar de decisão}
-\includegraphics[width=0.75\textwidth]{figuras/threshold_tradeoffs.png}
-\caption*{\footnotesize Fonte: elaboração própria.}
-\label{fig:threshold_curve}
-\end{figure}
 
 \begin{figure}[H]
 \centering
@@ -1100,7 +1104,7 @@ Para mensurar a contribuição de diferentes grupos de variáveis na performance
 \end{figure}
 
 
-Os resultados indicam que os atributos derivados de estatísticas individuais dos jogadores contribuem significativamente para o desempenho do modelo, respondendo por aproximadamente 42\% do ganho total de acurácia sobre o baseline (4,44 de 10,52 pontos percentuais). A queda substancial de AUC ao remover estas variáveis (de 0,7036 para 0,6610) sugere que informações no nível do jogador são cruciais para a capacidade discriminativa do modelo.
+Os resultados indicam que os atributos derivados de estatísticas individuais dos jogadores contribuem significativamente para o desempenho do modelo, respondendo por aproximadamente 42\% do ganho total de acurácia sobre o baseline (4,44 de 10,52 pontos percentuais). A queda substancial de AUC ao remover estas variáveis (de 0,7036 para 0,6610) sugere que informações no nível do jogador são importantes para a capacidade discriminativa do modelo.
 \section{Explicabilidade das predições}
 \label{sec:shap_resultados}
 A análise SHAP em teste temporal apontou maior impacto para diferenças de desempenho recente entre mandante e visitante, vantagem de descanso, indicadores de sequência e agregados de jogadores com maior tempo em quadra. A Figura \ref{fig:shap_importance} apresenta as 20 variáveis mais importantes segundo a média de valores absolutos de SHAP.
@@ -1199,7 +1203,7 @@ Por conta de limitações impostas no projeto para poder ser desenvolvido no tem
 \begin{itemize}
     \item Otimização sistemática das janelas temporais por equipe e por fase da temporada, à luz de \citeonline{horvat2023}.
     \item Enriquecimento de dados com indicadores de disponibilidade e carga de trabalho de jogadores, bem como métricas de força do elenco e \textit{matchups}.
-    \item Avaliação do uso controlado de \textit{odds} como variável explicativa, com testes de robustez para evitar sobreajuste a mercado.
+    \item Avaliação do uso controlado de \textit{odds} como variável explicativa, com testes de sensibilidade para evitar sobreajuste ao mercado.
     \item Calibração probabilística e ajuste de limiar baseados em função-objetivo prática, incluindo \textit{Brier score} e curvas de ganho.
     \item Estratégias de \textit{ensembling} e modelos hierárquicos que acomodem heterogeneidade entre equipes.
     \item Análise de subgrupos por margem de vitória e contexto, conforme indícios de sensibilidade observados na literatura \citeonline{lunelli2019}.
@@ -1208,5 +1212,5 @@ Por conta de limitações impostas no projeto para poder ser desenvolvido no tem
 
 \postextual
 \bibliographystyle{abntex2-alf}
-\bibliography{tcc/bibliografia}
+\bibliography{bibliografia.bib}
 \end{document}
